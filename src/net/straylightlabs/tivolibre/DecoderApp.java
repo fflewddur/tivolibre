@@ -72,6 +72,12 @@ public class DecoderApp {
             TivoDecoder.setLoggerLevel(Level.INFO);
         }
 
+        if (!cli.hasOption('m')) {
+            System.err.format("Error: You must provide your media access key%n");
+            showUsage();
+            System.exit(1);
+        }
+
         try {
             InputStream inputStream = null;
             OutputStream outputStream = null;
@@ -135,7 +141,7 @@ public class DecoderApp {
                 desc("File to decode (defaults to standard input)").build();
         options.addOption(option);
         option = Option.builder("m").argName("MAK").longOpt("mak").hasArg().
-                desc("Your media access key (REQUIRED)").required().build();
+                desc("Your media access key (REQUIRED)").build();
         options.addOption(option);
 
         return options;
