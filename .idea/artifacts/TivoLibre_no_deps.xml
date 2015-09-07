@@ -1,8 +1,0 @@
-<component name="ArtifactManager">
-  <artifact type="jar" build-on-make="true" name="TivoLibre:no-deps">
-    <output-path>$PROJECT_DIR$/jar</output-path>
-    <root id="archive" name="tivo-libre-no-deps.jar">
-      <element id="module-output" name="TivoLibre" />
-    </root>
-  </artifact>
-</component>

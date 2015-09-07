@@ -22,6 +22,8 @@
 
 package net.straylightlabs.tivolibre;
 
+import org.apache.commons.cli.*;
+
 import java.io.*;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -40,14 +42,17 @@ public class TivoDecoder {
     public static Logger logger;
 
     public final static String QUALCOMM_MSG = "Encryption by QUALCOMM";
-    public final static String VERSION = "0.5.0";
+    public final static String VERSION = "0.5.1";
+
+    static {
+        logger = Logger.getLogger(TivoDecoder.class.getName());
+        logger.setLevel(Level.SEVERE);
+    }
 
     public TivoDecoder(InputStream inputStream, OutputStream outputStream, String mak) {
         this.inputStream = inputStream;
         this.outputStream = outputStream;
         this.mak = mak;
-        logger = Logger.getLogger(TivoDecoder.class.getName());
-        logger.setLevel(Level.SEVERE);
     }
 
     public boolean decode() {
@@ -60,32 +65,7 @@ public class TivoDecoder {
         TivoDecoder.logger = logger;
     }
 
-    /**
-     * Simple driver application for command line use.
-     *
-     * @param args Paths to the input and output files and a string representing the MAK, in that order
-     */
-    public static void main(String[] args) {
-        System.out.format("TivoLibre %s%n", VERSION);
-
-        if (args.length != 3) {
-            System.out.format("%nTivoLibre requires three arguments: inputFile, outputFile, and MAK, in that order.%n");
-            System.out.format("For example: java -jar tivo-libre.jar tivoFilename.TiVo outputFilename.mpg 0123456789%n");
-            return;
-        }
-
-        Path in = Paths.get(args[0]);
-        Path out = Paths.get(args[1]);
-        String mak = args[2];
-        try (FileInputStream inputStream = new FileInputStream(in.toFile());
-             BufferedOutputStream outputStream = new BufferedOutputStream(new FileOutputStream(out.toFile()))) {
-            TivoDecoder decoder = new TivoDecoder(inputStream, outputStream, mak);
-            System.out.println(QUALCOMM_MSG);
-            decoder.decode();
-        } catch (FileNotFoundException e) {
-            TivoDecoder.logger.severe(String.format("Error: %s", e.getLocalizedMessage()));
-        } catch (IOException e) {
-            TivoDecoder.logger.severe(String.format("Error reading/writing files: %s", e.getLocalizedMessage()));
-        }
+    public static void setLoggerLevel(Level level) {
+        logger.setLevel(level);
     }
 }

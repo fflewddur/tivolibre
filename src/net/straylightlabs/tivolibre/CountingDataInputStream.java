@@ -22,7 +22,6 @@
 
 package net.straylightlabs.tivolibre;
 
-import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -31,18 +30,17 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * Wrap a DataInputStream and include a marker of the current position.
+ * Read an InputStream into a ByteBuffer and provide methods for extracting primitive data types in big-endian order.
+ * This class allows us to use a PipedInputStream as our input source without worrying about overflowing the pipe's buffer.
  */
 class CountingDataInputStream implements AutoCloseable {
-    private final DataInputStream stream;
-    private ConcurrentByteBuffer byteBuffer;
-    private long position; // Current position in @stream, in bytes.
+    private ConcurrentByteBuffer byteBuffer; // This hold the unread portion of @stream
+    private long position; // Current read position in @stream, in bytes.
     private Thread readerThread;
 
     public CountingDataInputStream(InputStream stream) {
         byteBuffer = new ConcurrentByteBuffer();
-        this.stream = new DataInputStream(stream);
-        StreamReader streamReader = new StreamReader(this.stream, byteBuffer);
+        StreamReader streamReader = new StreamReader(stream, byteBuffer);
         readerThread = new Thread(streamReader);
         readerThread.start();
     }
@@ -99,9 +97,11 @@ class CountingDataInputStream implements AutoCloseable {
         if (readerThread.isAlive()) {
             readerThread.interrupt();
         }
-        stream.close();
     }
 
+    /**
+     * Slurp up all the data from @source as quickly as it can.
+     */
     private static class StreamReader implements Runnable {
         private InputStream source;
         private ConcurrentByteBuffer destination;
@@ -142,7 +142,9 @@ class CountingDataInputStream implements AutoCloseable {
         private boolean sourceClosed;
 
         private static final int INITIAL_BUFFER_SIZE = 1024 * 1024; // 1MB
-        private static final float SHIFT_RATIO = 0.5f; // when readPos passes SHIFT_RATIO * buffer.length, shift buffer back to 0
+        private static final int BUFFER_EXPAND_FACTOR = 2;
+        private static final float SHIFT_RATIO = 0.9f; // when readPos passes SHIFT_RATIO * buffer.length, shift buffer back to 0
+        private static final int MAX_READ_SIZE = 1024 * 64; // 64KB
 
         public ConcurrentByteBuffer() {
             byte[] bytes = new byte[INITIAL_BUFFER_SIZE];
@@ -154,10 +156,12 @@ class CountingDataInputStream implements AutoCloseable {
 
         public boolean readFrom(InputStream stream) throws IOException {
             writeLock.lock();
-            byte[] bytes = buffer.array();
-            if (bytes.length - writePos > 0) {
+            if (expandBufferIfNeeded()) {
                 int offset = writePos;
-                int bytesRead = stream.read(bytes, offset, bytes.length - offset);
+                byte[] bytes = buffer.array();
+                // Limit the number of bytes read to ensure we don't hold the writeLock for too long
+                int bytesRead = stream.read(bytes, offset, Math.min(bytes.length - offset, MAX_READ_SIZE));
+//            TivoDecoder.logger.info(String.format("Read %d bytes from input stream", bytesRead));
                 if (bytesRead == -1) {
                     sourceClosed = true;
                     writeLock.unlock();
@@ -165,14 +169,41 @@ class CountingDataInputStream implements AutoCloseable {
                 }
                 writePos += bytesRead;
             }
-            shiftBuffer();
+
+            shiftBufferIfNeeded();
             writeLock.unlock();
+
             return true;
         }
 
-        private void shiftBuffer() {
+        /**
+         * Expand our buffer and shift its contents such that readPos = 0.
+         * Return false if the buffer can not be expanded.
+         */
+        private boolean expandBufferIfNeeded() {
+            byte[] bytes = buffer.array();
+            int spaceRemaining = bytes.length - writePos;
+            if (spaceRemaining == 0) {
+                int newBufferSize = bytes.length * BUFFER_EXPAND_FACTOR;
+                if (newBufferSize < 0) {
+                    return false;
+                }
+                TivoDecoder.logger.info(String.format("Expanding buffer from %d to %d (readPos=%d, writePos=%d)",
+                        bytes.length, newBufferSize, readPos, writePos));
+                byte[] newBuffer = new byte[newBufferSize];
+                System.arraycopy(bytes, readPos, newBuffer, 0, writePos - readPos);
+                writePos -= readPos;
+                readPos = 0;
+                buffer = ByteBuffer.wrap(newBuffer);
+            }
+            return true;
+        }
+
+        private void shiftBufferIfNeeded() {
             byte[] bytes = buffer.array();
             if (readPos > bytes.length * SHIFT_RATIO) {
+                TivoDecoder.logger.info(String.format("Shifting buffer from %d to %d (length = %d)",
+                        readPos, 0, writePos - readPos));
                 System.arraycopy(bytes, readPos, bytes, 0, writePos - readPos);
                 writePos -= readPos;
                 readPos = 0;
