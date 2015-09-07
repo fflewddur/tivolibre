@@ -8,6 +8,10 @@ You can use TivoLibre as a stand-alone command-line app. By default, it will rea
 
     java -jar tivo-libre.jar -i input.TiVo -o output.mpg -m 0123456789
 
+To view the full list of options, use the -h command-line parameter:
+
+    java -jar tivo-libre.jar -h
+
 # API Usage
 The tivo-libre.jar file exposes the TivoDecoder class. TivoDecoder requires an InputStream, an OutputStream, and a String representing the MAK associated with the InputStream. Call the decode() method to start the coding process; decode() is a blocking method that returns true on success and false on failure.
 
@@ -25,4 +29,4 @@ The tivo-libre.jar file exposes the TivoDecoder class. TivoDecoder requires an I
 # Dependencies
 TivoLibre makes use of the Stream APIs introduced in Java 8 and will not run on older Java virtual machines.
 
-TivoLibre requires commons-codec-1.9.jar and commons-cli-1.3.1.jar (or higher) from Apache Commons. These libraries are included in tivo-libre.jar. If you want to use TivoLibre in a project that already includes these libraries, you can use the tivo-libre-no-deps.jar file. The common-cli JAR is only needed by the DecoderApp command-line application.
+TivoLibre requires commons-codec-1.9.jar and commons-cli-1.3.1.jar (or higher) from Apache Commons. These libraries are included in tivo-libre.jar. If you want to use TivoLibre in a project that already includes these libraries, you can use the tivo-libre-no-deps.jar file. The commons-cli JAR is only needed by the DecoderApp command-line application.
