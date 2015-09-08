@@ -37,7 +37,6 @@ class TransportStream {
     private byte[] pesBuffer;
     private byte[] turingKey;
     private int turingBlockNumber;
-    //    private int turingCrypted;
     private final Deque<TransportStreamPacket> packets;
     private final Deque<Integer> pesHeaderLengths;
     private final OutputStream outputStream;
@@ -45,7 +44,6 @@ class TransportStream {
     public static final int TS_FRAME_SIZE = 188;
 
     public TransportStream(OutputStream outputStream, TuringDecoder decoder) {
-//        this.pid = pid;
         this.type = StreamType.NONE;
         this.outputStream = outputStream;
         this.turingDecoder = decoder;
@@ -86,7 +84,6 @@ class TransportStream {
             packets.addLast(packet);
 
             // Form one contiguous buffer containing all buffered packet payloads
-//            Arrays.fill(pesBuffer, (byte) 0);
             int pesBufferLen = 0;
             for (TransportStreamPacket p : packets) {
                 ByteBuffer data = p.getData();

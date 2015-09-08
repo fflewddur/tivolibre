@@ -38,10 +38,6 @@ class TuringDecoder {
         streams = new HashMap<>();
     }
 
-    public void setKey(byte[] newKey) {
-        System.arraycopy(newKey, 0, key, 0, newKey.length);
-    }
-
     public TuringStream prepareFrame(int streamId, int blockId) {
         TuringStream stream = streams.get(streamId);
         if (stream == null) {
@@ -89,7 +85,11 @@ class TuringDecoder {
     }
 
     public void decryptBytes(TuringStream stream, byte[] buffer) {
-        for (int i = 0; i < buffer.length; i++) {
+        decryptBytes(stream, buffer, 0, buffer.length);
+    }
+
+    public void decryptBytes(TuringStream stream, byte[] buffer, int offset, int length) {
+        for (int i = offset; i < length + offset; i++) {
             if (stream.getCipherPos() >= stream.getCipherLen()) {
                 stream.generate();
             }

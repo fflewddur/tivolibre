@@ -1,5 +1,5 @@
 # TivoLibre
-TivoLibre is a Java library for decoding TiVo files to standard MPEG files. It currently only supports TiVo Transport Stream files.
+TivoLibre is a Java library for decoding TiVo files to standard MPEG files. It supports both TiVo Transport Stream and TiVo Program Stream files.
 
 TivoLibre is based on TivoDecode 0.4.4.
 

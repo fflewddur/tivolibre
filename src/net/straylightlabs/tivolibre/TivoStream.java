@@ -72,8 +72,8 @@ class TivoStream {
             TivoStreamDecoder streamDecoder;
             switch (header.getFormat()) {
                 case PROGRAM_STREAM:
-                    TivoDecoder.logger.severe("TiVo Program Stream files are not [yet] supported :(");
-                    return false;
+                    streamDecoder = new ProgramStreamDecoder(decoder, header.getMpegOffset(), dataInputStream, outputStream);
+                    break;
                 case TRANSPORT_STREAM:
                     streamDecoder = new TransportStreamDecoder(decoder, header.getMpegOffset(), dataInputStream, outputStream);
                     break;
