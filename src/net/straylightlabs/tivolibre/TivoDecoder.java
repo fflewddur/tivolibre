@@ -22,11 +22,8 @@
 
 package net.straylightlabs.tivolibre;
 
-import org.apache.commons.cli.*;
-
-import java.io.*;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
