@@ -42,7 +42,7 @@ public class TivoDecoder {
     public static Logger logger;
 
     public final static String QUALCOMM_MSG = "Encryption by QUALCOMM";
-    public final static String VERSION = "0.5.1";
+    public final static String VERSION = "0.5.2";
 
     static {
         logger = Logger.getLogger(TivoDecoder.class.getName());
