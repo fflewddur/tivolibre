@@ -22,9 +22,7 @@
 
 package net.straylightlabs.tivolibre;
 
-import java.io.EOFException;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -32,17 +30,26 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 /**
  * Read an InputStream into a ByteBuffer and provide methods for extracting primitive data types in big-endian order.
  * This class allows us to use a PipedInputStream as our input source without worrying about overflowing the pipe's buffer.
+ * If we're not using a PipedInputStream, pass everything through to a traditional DataInputStream.
  */
 class CountingDataInputStream implements AutoCloseable {
+    private final boolean piped;
+    private DataInputStream inputStream;
     private ConcurrentByteBuffer byteBuffer; // This hold the unread portion of @stream
     private long position; // Current read position in @stream, in bytes.
     private Thread readerThread;
 
     public CountingDataInputStream(InputStream stream) {
-        byteBuffer = new ConcurrentByteBuffer();
-        StreamReader streamReader = new StreamReader(stream, byteBuffer);
-        readerThread = new Thread(streamReader);
-        readerThread.start();
+        if (stream instanceof PipedInputStream) {
+            piped = true;
+            byteBuffer = new ConcurrentByteBuffer();
+            StreamReader streamReader = new StreamReader(stream, byteBuffer);
+            readerThread = new Thread(streamReader);
+            readerThread.start();
+        } else {
+            piped = false;
+            inputStream = new DataInputStream(stream);
+        }
     }
 
     public long getPosition() {
@@ -50,43 +57,78 @@ class CountingDataInputStream implements AutoCloseable {
     }
 
     public int read(byte[] buffer) throws IOException {
-        int val = byteBuffer.read(buffer);
+        int val;
+        if (piped) {
+            val = byteBuffer.read(buffer);
+        } else {
+            val = inputStream.read(buffer);
+        }
         position += val;
         return val;
     }
 
     public int read(byte[] buffer, int offset, int length) throws IOException {
-        int val = byteBuffer.read(buffer, offset, length);
+        int val;
+        if (piped) {
+            val = byteBuffer.read(buffer, offset, length);
+        } else {
+            val = inputStream.read(buffer, offset, length);
+        }
         position += val;
         return val;
     }
 
     public byte readByte() throws IOException {
-        byte val = byteBuffer.readByte();
+        byte val;
+        if (piped) {
+            val = byteBuffer.readByte();
+        } else {
+            val = inputStream.readByte();
+        }
         position += Byte.BYTES;
         return val;
     }
 
     public int readInt() throws IOException {
-        int val = byteBuffer.readInt();
+        int val;
+        if (piped) {
+            val = byteBuffer.readInt();
+        } else {
+            val = inputStream.readInt();
+        }
         position += Integer.BYTES;
         return val;
     }
 
     public int readUnsignedByte() throws IOException {
-        int val = byteBuffer.readUnsignedByte();
+        int val;
+        if (piped) {
+            val = byteBuffer.readUnsignedByte();
+        } else {
+            val = inputStream.readUnsignedByte();
+        }
         position += Byte.BYTES;
         return val;
     }
 
     public int readUnsignedShort() throws IOException {
-        int val = byteBuffer.readUnsignedShort();
+        int val;
+        if (piped) {
+            val = byteBuffer.readUnsignedShort();
+        } else {
+            val = inputStream.readUnsignedShort();
+        }
         position += Short.BYTES;
         return val;
     }
 
     public int skipBytes(int bytesToSkip) throws IOException {
-        int val = byteBuffer.skipBytes(bytesToSkip);
+        int val;
+        if (piped) {
+            val = byteBuffer.skipBytes(bytesToSkip);
+        } else {
+            val = inputStream.skipBytes(bytesToSkip);
+        }
         position += val;
         return val;
     }
@@ -94,8 +136,12 @@ class CountingDataInputStream implements AutoCloseable {
     @Override
     public void close() throws IOException {
         TivoDecoder.logger.info("Closing CountingDataInputStream. Final read position: " + position);
-        if (readerThread.isAlive()) {
-            readerThread.interrupt();
+        if (piped) {
+            if (readerThread.isAlive()) {
+                readerThread.interrupt();
+            }
+        } else {
+            inputStream.close();
         }
     }
 
@@ -142,11 +188,13 @@ class CountingDataInputStream implements AutoCloseable {
         private Lock readLock;
         private Lock writeLock;
         private boolean sourceClosed;
+        private int readDelay;
 
         private static final int INITIAL_BUFFER_SIZE = 1024 * 1024 * 16; // 16MB
         private static final int BUFFER_EXPAND_FACTOR = 2;
         private static final float SHIFT_RATIO = 0.9f; // when readPos passes SHIFT_RATIO * buffer.length, shift buffer back to 0
         private static final int MAX_READ_SIZE = 1024 * 64; // 64KB
+        private static final int INITIAL_READ_DELAY = 1; // milliseconds to sleep after each network read
 
         public ConcurrentByteBuffer() {
             bufferArray = new byte[INITIAL_BUFFER_SIZE];
@@ -154,6 +202,7 @@ class CountingDataInputStream implements AutoCloseable {
             ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
             readLock = lock.readLock();
             writeLock = lock.writeLock();
+            readDelay = INITIAL_READ_DELAY;
         }
 
         public boolean readFrom(InputStream stream) throws IOException {
@@ -173,7 +222,7 @@ class CountingDataInputStream implements AutoCloseable {
             shiftBufferIfNeeded();
             writeLock.unlock();
             try {
-                Thread.sleep(1);
+                Thread.sleep(readDelay);
 //                Thread.yield();
             } catch (InterruptedException e) {
 //
@@ -183,6 +232,7 @@ class CountingDataInputStream implements AutoCloseable {
 
         /**
          * Expand our buffer and shift its contents such that readPos = 0.
+         * Double the read delay, since this buffer filling up means we're reading too quickly.
          * Return false if the buffer can not be expanded.
          */
         private boolean expandBufferIfNeeded() {
@@ -195,6 +245,8 @@ class CountingDataInputStream implements AutoCloseable {
                 TivoDecoder.logger.info(String.format("Expanding buffer from %,d MB to %,d MB (readPos=%d, writePos=%d)",
                         bufferArray.length / (1024 * 1024), newBufferSize / (1024 * 1024), readPos, writePos));
                 resizeBuffer(newBufferSize);
+                readDelay *= 2;
+                TivoDecoder.logger.info(String.format("Increasing readDelay to %d ms", readDelay));
             }
             return true;
         }
