@@ -22,6 +22,7 @@
 
 package net.straylightlabs.tivolibre;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -32,7 +33,6 @@ class TransportStreamPacket {
     private Header header;
     private AdaptationField adaptationField;
     private ByteBuffer buffer;
-    //    private ByteBuffer data;
     private int dataOffset;
     private int pesHeaderOffset;
 
@@ -44,9 +44,16 @@ class TransportStreamPacket {
     }
 
     public boolean readFrom(ByteBuffer source) throws IOException {
+        // Can we read the desired number of bytes?
+        if (source.position() + TransportStream.FRAME_SIZE > source.limit()) {
+            throw new EOFException();
+        }
+
         // Make a local copy of the buffer
-        buffer = ByteBuffer.allocate(source.capacity());
-        System.arraycopy(source.array(), 0, buffer.array(), 0, source.capacity());
+        buffer = ByteBuffer.allocate(TransportStream.FRAME_SIZE);
+        System.arraycopy(source.array(), source.position(), buffer.array(), 0, TransportStream.FRAME_SIZE);
+        // Advance the position of the source buffer
+        source.position(source.position() + TransportStream.FRAME_SIZE);
 
         header = readHeader(buffer);
         dataOffset = 0;
@@ -54,15 +61,15 @@ class TransportStreamPacket {
         return true;
     }
 
-    private Header readHeader(ByteBuffer source) throws IOException {
+    private Header readHeader(ByteBuffer source) {
         int headerLength = Integer.BYTES;
         int headerBits = source.getInt();
-        int adaptationFieldLength = 0;
-        int adaptationFieldBits = 0;
+        int adaptationFieldLength;
+        int adaptationFieldBits;
 
         header = new Header(headerBits);
         if (!checkHeader(header)) {
-            throw new IOException("TransportStream appears to be corrupt, cannot find sync bytes");
+            throw new TransportStreamException("TransportStream appears to be corrupt, cannot find sync bytes");
         }
 
         if (header.hasAdaptationField) {
@@ -72,7 +79,7 @@ class TransportStreamPacket {
                 adaptationField = new AdaptationField(adaptationFieldBits);
                 if (adaptationField.isPrivate()) {
                     TivoDecoder.logger.severe("Found private adaptation field data; we don't know how to handle this");
-                    throw new IOException("Stream contains private adaptation field data");
+                    throw new TransportStreamException("Stream contains private adaptation field data");
                 }
                 headerLength += (adaptationFieldLength + 1);
             } else {
@@ -87,10 +94,10 @@ class TransportStreamPacket {
 
     private boolean checkHeader(Header header) {
         if (!header.isValid()) {
-            TivoDecoder.logger.severe("Invalid TS packet header");
+            TivoDecoder.logger.severe("Invalid TS packet header for packet " + packetId);
             return false;
         } else if (header.hasTransportError()) {
-            TivoDecoder.logger.severe("Transport error flag set");
+            TivoDecoder.logger.severe("Transport error flag set for packet " + packetId);
             return false;
         }
         return true;
@@ -104,15 +111,15 @@ class TransportStreamPacket {
             throw new IllegalStateException("Cannot get bytes from empty packet");
         }
 
-        byte[] bytes = new byte[TransportStream.TS_FRAME_SIZE];
-        System.arraycopy(buffer.array(), 0, bytes, 0, TransportStream.TS_FRAME_SIZE);
+        byte[] bytes = new byte[TransportStream.FRAME_SIZE];
+        System.arraycopy(buffer.array(), 0, bytes, 0, TransportStream.FRAME_SIZE);
         return bytes;
     }
 
     public byte[] getScrambledBytes(byte[] decrypted) {
-        byte[] bytes = new byte[TransportStream.TS_FRAME_SIZE];
+        byte[] bytes = new byte[TransportStream.FRAME_SIZE];
         if (buffer.hasArray()) {
-            System.arraycopy(buffer.array(), 0, bytes, 0, TransportStream.TS_FRAME_SIZE - decrypted.length);
+            System.arraycopy(buffer.array(), 0, bytes, 0, TransportStream.FRAME_SIZE - decrypted.length);
             System.arraycopy(decrypted, 0, bytes, header.getLength() + getPesHeaderOffset(), decrypted.length);
         } else {
             throw new IllegalStateException("Cannot get bytes from empty packet");
@@ -170,7 +177,7 @@ class TransportStreamPacket {
     }
 
     public byte[] getDataAt(int offset) {
-        byte[] data = new byte[TransportStream.TS_FRAME_SIZE - header.getLength() - offset];
+        byte[] data = new byte[TransportStream.FRAME_SIZE - header.getLength() - offset];
         System.arraycopy(buffer.array(), header.getLength() + offset, data, 0, data.length);
         return data;
     }
@@ -257,6 +264,7 @@ class TransportStreamPacket {
         TIME_DATE_TABLE(0x0014, 0x0014),
         RESERVED2(0x0015, 0x001F),
         AUDIO_VIDEO_PRIVATE_DATA(0x0020, 0x1FFE),
+        NULL(0x1FFF, 0x1FFF),
         NONE(0xFFFF, 0xFFFF);
 
         private final int lowVal;
@@ -306,7 +314,7 @@ class TransportStreamPacket {
         }
 
         public void setLength(int val) {
-            if (val > TransportStream.TS_FRAME_SIZE || val <= 0) {
+            if (val > TransportStream.FRAME_SIZE || val <= 0) {
                 throw new IllegalArgumentException("Invalid header length: " + val);
             }
             length = val;

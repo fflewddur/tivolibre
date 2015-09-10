@@ -23,7 +23,6 @@
 package net.straylightlabs.tivolibre;
 
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
@@ -40,13 +39,13 @@ class TransportStream {
     private final Deque<Integer> pesHeaderLengths;
     private final OutputStream outputStream;
 
-    public static final int TS_FRAME_SIZE = 188;
+    public static final int FRAME_SIZE = 188;
 
     public TransportStream(OutputStream outputStream, TuringDecoder decoder) {
         this.type = StreamType.NONE;
         this.outputStream = outputStream;
         this.turingDecoder = decoder;
-        pesBuffer = new byte[TS_FRAME_SIZE * 10];
+        pesBuffer = new byte[FRAME_SIZE * 10];
         packets = new ArrayDeque<>();
         pesHeaderLengths = new ArrayDeque<>();
     }
@@ -107,7 +106,7 @@ class TransportStream {
                 for (TransportStreamPacket p : packets) {
                     while (!pesHeaderLengths.isEmpty()) {
                         int headerLen = pesHeaderLengths.removeFirst() / 8;
-                        if (headerLen + p.getPayloadOffset() + p.getPesHeaderOffset() < TS_FRAME_SIZE) {
+                        if (headerLen + p.getPayloadOffset() + p.getPesHeaderOffset() < FRAME_SIZE) {
                             p.setPesHeaderOffset(p.getPesHeaderOffset() + headerLen);
                             pesHeaderLength -= headerLen;
                         } else {
@@ -119,7 +118,7 @@ class TransportStream {
                             //        start decrypt at payload start in NEXT pkt
                             //   3. pkt boundary falls within payload
                             //        start decrypt offset into the payload
-                            int packetBoundaryOffset = TS_FRAME_SIZE - p.getPayloadOffset() - p.getPesHeaderOffset();
+                            int packetBoundaryOffset = FRAME_SIZE - p.getPayloadOffset() - p.getPesHeaderOffset();
                             if (packetBoundaryOffset < 4) {
                                 headerLen -= packetBoundaryOffset;
                                 headerLen *= 8;

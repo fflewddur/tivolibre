@@ -28,9 +28,16 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 class TransportStreamDecoder extends TivoStreamDecoder {
+    private ByteBuffer inputBuffer;
+    private int extraBufferSize;
+
+    private static final byte SYNC_BYTE_VALUE = 0x47;
+    private static final int PACKETS_UNTIL_RESYNC = 5;
+
     public TransportStreamDecoder(TuringDecoder decoder, int mpegOffset, CountingDataInputStream inputStream,
                                   OutputStream outputStream) {
         super(decoder, mpegOffset, inputStream, outputStream);
+        inputBuffer = ByteBuffer.allocate(TransportStream.FRAME_SIZE);
     }
 
     @Override
@@ -38,19 +45,25 @@ class TransportStreamDecoder extends TivoStreamDecoder {
         try {
             advanceToMpegOffset();
             TivoDecoder.logger.info(String.format("Starting TS processing at position %,d", inputStream.getPosition()));
-            ByteBuffer buffer = ByteBuffer.allocate(TransportStream.TS_FRAME_SIZE);
+
             while (true) {
-                int bytesRead = inputStream.read(buffer.array());
-                if (bytesRead < TransportStream.TS_FRAME_SIZE) {
-                    throw new EOFException();
+                fillBuffer();
+
+                TransportStreamPacket packet;
+                try {
+                    packet = TransportStreamPacket.createFrom(inputBuffer, ++packetCounter);
+                } catch (TransportStreamException e) {
+                    TivoDecoder.logger.severe(e.getLocalizedMessage());
+                    packet = createPacketAtNextSyncByte(++packetCounter);
+                    TivoDecoder.logger.info("Re-synched!");
                 }
-                TransportStreamPacket packet = TransportStreamPacket.createFrom(buffer, ++packetCounter);
+
 //                System.out.println("Packet contents:\n" + packet.dump());
 //                packet.setPacketId(++packetCounter);
-//                if (packetCounter > 4) {
+//                if (packetCounter > 6000000) {
 //                    return false;
 //                }
-//                if (packetCounter >=     4734439) {
+//                if (packetCounter >= 4730000) {
                 if (packetCounter % 10000 == 0) {
                     TivoDecoder.logger.info(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
                                     packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
@@ -85,16 +98,16 @@ class TransportStreamDecoder extends TivoStreamDecoder {
                             }
                         }
                         break;
+                    case NULL:
+                        // These packets are for maintaining a constant bit-rate and are meant to be discarded
+                        TivoDecoder.logger.info("NULL packet");
+                        continue;
                     default:
                         TivoDecoder.logger.warning("Unsupported packet type: " + packet.getPacketType());
 //                        return false;
                 }
-                TransportStream stream = streams.get(packet.getPID());
-                if (stream == null) {
-                    TivoDecoder.logger.warning(String.format("No TransportStream exists with PID 0x%04x, ignoring packet",
-                                    packet.getPID())
-                    );
-                } else if (!stream.addPacket(packet)) {
+
+                if (!addPacketToStream(packet)) {
                     return false;
                 }
             }
@@ -106,6 +119,88 @@ class TransportStreamDecoder extends TivoStreamDecoder {
         }
 
         return false;
+    }
+
+    private void fillBuffer() throws IOException {
+        if (extraBufferSize == 0) {
+            int bytesRead = inputStream.read(inputBuffer.array());
+            inputBuffer.rewind();
+            if (bytesRead < TransportStream.FRAME_SIZE) {
+                throw new EOFException();
+            }
+        } else {
+            extraBufferSize -= TransportStream.FRAME_SIZE;
+            if (extraBufferSize == 0) {
+                resizeBuffer(TransportStream.FRAME_SIZE, inputBuffer.position());
+            }
+        }
+    }
+
+    /**
+     * Start searching FRAME_SIZE bytes from each byte with a value of SYNC_BYTE_VALUE.
+     * Each such byte we find indicates one good packet. Once we find PACKETS_UNTIL_RESYNC sequential packets,
+     * return the first of them and setup our buffers to point to the rest.
+     */
+    private TransportStreamPacket createPacketAtNextSyncByte(long nextPacketId) throws IOException {
+        TransportStreamPacket packet = null;
+        int pos = 0;
+        inputBuffer.rewind();
+        while (packet == null) {
+            if (pos == inputBuffer.capacity()) {
+                resizeAndFillInputBuffer(inputBuffer.capacity() + TransportStream.FRAME_SIZE);
+            }
+            if (inputBuffer.get(pos) == SYNC_BYTE_VALUE) {
+                int syncedPackets = 0;
+                for (int i = 1; i <= PACKETS_UNTIL_RESYNC; i++) {
+                    int nextSyncPos = pos + (i * TransportStream.FRAME_SIZE);
+                    int neededBytes = (nextSyncPos - inputBuffer.capacity()) + 1;
+                    if (neededBytes > 0) {
+                        resizeAndFillInputBuffer(inputBuffer.capacity() + neededBytes);
+                    }
+                    if (inputBuffer.get(nextSyncPos) != 0x47) {
+                        // Nope, can't resynchronize from @pos
+                        break;
+                    } else {
+                        syncedPackets++;
+                    }
+                }
+
+                if (syncedPackets == PACKETS_UNTIL_RESYNC) {
+                    // Looks like we re-synchronized!
+                    inputBuffer.position(pos);
+                    packet = TransportStreamPacket.createFrom(inputBuffer, nextPacketId);
+                    // Read the rest of the following packet into our buffer
+                    resizeAndFillInputBuffer(inputBuffer.capacity() + (TransportStream.FRAME_SIZE - 1));
+                    extraBufferSize = inputBuffer.capacity() - pos - TransportStream.FRAME_SIZE;
+                }
+            }
+            pos++;
+        }
+        return packet;
+    }
+
+    private void resizeAndFillInputBuffer(int newSize) throws IOException {
+        // Resize the buffer
+        int oldSize = inputBuffer.capacity();
+        int neededBytes = newSize - oldSize;
+        resizeBuffer(newSize, 0);
+
+        // And fill it to capacity
+        int bytesRead = inputStream.read(inputBuffer.array(), oldSize, neededBytes);
+        if (bytesRead < neededBytes) {
+            throw new EOFException();
+        }
+    }
+
+    private void resizeBuffer(int newSize, int sourceOffset) {
+        int oldSize = inputBuffer.capacity();
+        ByteBuffer newBuffer = ByteBuffer.allocate(newSize);
+        System.arraycopy(inputBuffer.array(), sourceOffset, newBuffer.array(), 0, Math.min(newSize, oldSize));
+        int oldPos = inputBuffer.position();
+        if (oldPos <= newBuffer.capacity()) {
+            newBuffer.position(oldPos);
+        }
+        inputBuffer = newBuffer;
     }
 
     private boolean processPmtPacket(TransportStreamPacket packet) {
@@ -218,6 +313,18 @@ class TransportStreamDecoder extends TivoStreamDecoder {
             streamLength -= 16;
         }
 
+        return true;
+    }
+
+    private boolean addPacketToStream(TransportStreamPacket packet) {
+        TransportStream stream = streams.get(packet.getPID());
+        if (stream == null) {
+            TivoDecoder.logger.warning(String.format("No TransportStream exists with PID 0x%04x, ignoring packet",
+                            packet.getPID())
+            );
+        } else if (!stream.addPacket(packet)) {
+            return false;
+        }
         return true;
     }
 }

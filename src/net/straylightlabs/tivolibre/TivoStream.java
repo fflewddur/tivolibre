@@ -70,6 +70,7 @@ class TivoStream {
             }
 
             TivoStreamDecoder streamDecoder;
+            TivoDecoder.logger.info("File format: " + header.getFormat());
             switch (header.getFormat()) {
                 case PROGRAM_STREAM:
                     streamDecoder = new ProgramStreamDecoder(decoder, header.getMpegOffset(), dataInputStream, outputStream);
