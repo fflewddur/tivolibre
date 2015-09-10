@@ -36,15 +36,18 @@ class TransportStreamDecoder extends TivoStreamDecoder {
     public boolean process() {
         try {
             advanceToMpegOffset();
+            TivoDecoder.logger.info(String.format("Starting TS processing at position %,d", inputStream.getPosition()));
             TransportStreamPacket packet = new TransportStreamPacket();
             while (packet.readFrom(inputStream)) {
                 packet.setPacketId(++packetCounter);
+//                if (packetCounter > 4) {
+//                    return false;
+//                }
                 if (packetCounter % 10000 == 0) {
-                    TivoDecoder.logger.info(
-                            String.format("PacketId: %d Total bytes read from pipe: %d", packetCounter, inputStream.getPosition())
+                    TivoDecoder.logger.info(String.format("PacketId: %,d Type: %s PID: %,d Position after reading: %,d",
+                                    packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
                     );
                 }
-//                System.out.println(packet);
                 switch (packet.getPacketType()) {
                     case PROGRAM_ASSOCIATION_TABLE:
                         if (!processPatPacket(packet)) {
@@ -74,21 +77,21 @@ class TransportStreamDecoder extends TivoStreamDecoder {
                         }
                         break;
                     default:
-                        TivoDecoder.logger.severe("Unknown packet type");
+                        TivoDecoder.logger.severe("Unsupported packet type: " + packet.getPacketType());
                         return false;
                 }
                 TransportStream stream = streams.get(packet.getPID());
                 if (stream == null) {
-                    TivoDecoder.logger.severe(String.format("Error: No TransportStream exists with PID 0x%04x", packet.getPID()));
-                    return false;
-                }
-                if (!stream.addPacket(packet)) {
+                    TivoDecoder.logger.warning(String.format("No TransportStream exists with PID 0x%04x, ignoring packet",
+                                    packet.getPID())
+                    );
+                } else if (!stream.addPacket(packet)) {
                     return false;
                 }
 
                 packet = new TransportStreamPacket();
             }
-            TivoDecoder.logger.info("Successfully read packets");
+            TivoDecoder.logger.info("Successfully read all packets");
             return true;
         } catch (EOFException e) {
             TivoDecoder.logger.info("End of file reached");
@@ -107,39 +110,71 @@ class TransportStreamDecoder extends TivoStreamDecoder {
         }
 
         // Advance past table_id field
-        packet.advanceDataOffset(1);
+        int tableId = packet.readUnsignedByteFromData();
+        if (tableId != 0x02) {
+            TivoDecoder.logger.severe(String.format("Unexpected Table ID for PMT: 0x%02x", tableId & 0xff));
+            return false;
+        }
 
         int pmtField = packet.readUnsignedShortFromData();
+        boolean longSyntax = (pmtField & 0x8000) == 0x8000;
+        if (!longSyntax) {
+            TivoDecoder.logger.severe("PMT packet uses unknown syntax");
+            return false;
+        }
         int sectionLength = pmtField & 0x0fff;
 
-        // Advance past program/section/next numbers
-        packet.advanceDataOffset(9);
-        sectionLength -= 9;
+        int programNumber = packet.readUnsignedShortFromData();
+        sectionLength -= 2;
+        packet.advanceDataOffset(1);
+        sectionLength -= 1;
+        int sectionNumber = packet.readUnsignedByteFromData();
+        sectionLength--;
+        int lastSectionNumber = packet.readUnsignedByteFromData();
+        sectionLength--;
+        int pcrPid = packet.readUnsignedShortFromData() & 0x1fff;
+        sectionLength -= 2;
+        int programInfoLength = packet.readUnsignedShortFromData() & 0x0fff;
+        sectionLength -= 2;
+
+        if (programInfoLength > 0) {
+            TivoDecoder.logger.info(String.format("Skipping %d bytes of descriptors", programInfoLength));
+            packet.advanceDataOffset(programInfoLength);
+        }
 
         // Ignore the CRC
         sectionLength -= 4;
 
         while (sectionLength > 0) {
             int streamTypeId = packet.readUnsignedByteFromData();
+            sectionLength--;
             TransportStream.StreamType streamType = TransportStream.StreamType.valueOf(streamTypeId);
 
-            // Advance past stream_type field
-            sectionLength--;
-
             pmtField = packet.readUnsignedShortFromData();
+            sectionLength -= 2;
             int streamPid = pmtField & 0x1fff;
-            sectionLength -= 2;
 
             pmtField = packet.readUnsignedShortFromData();
-            int esInfoLength = pmtField & 0x1fff;
             sectionLength -= 2;
-            // Advance past ES info
-            packet.advanceDataOffset(esInfoLength);
-            sectionLength -= esInfoLength;
+            int esInfoLength = pmtField & 0x0fff;
+            while (esInfoLength > 0) {
+                // TODO Not sure if we need to do anything with these streams.
+                int tag = packet.readUnsignedByteFromData();
+                esInfoLength--;
+                sectionLength--;
+                int length = packet.readUnsignedByteFromData();
+                esInfoLength--;
+                sectionLength--;
+                for (int i = 0; i < length; i++) {
+                    int val = packet.readUnsignedByteFromData();
+                    esInfoLength--;
+                    sectionLength--;
+                }
+            }
 
             // Create a stream for this PID unless one already exists
             if (!streams.containsKey(streamPid)) {
-//                System.out.format("Creating a new %s stream for PID 0x%04x%n", streamType, streamPid);
+                TivoDecoder.logger.info(String.format("Creating a new %s stream for PID 0x%04x", streamType, streamPid));
                 TransportStream stream = new TransportStream(outputStream, turingDecoder, streamType);
                 streams.put(streamPid, stream);
             }

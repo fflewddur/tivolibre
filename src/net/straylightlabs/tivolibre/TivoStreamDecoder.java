@@ -80,7 +80,8 @@ abstract class TivoStreamDecoder {
         }
 
         int patField = packet.readUnsignedShortFromData();
-        int sectionLength = patField & 0x03ff;
+        int sectionLength = patField & 0x0fff;
+
         if ((patField & 0xC000) != 0x8000) {
             TivoDecoder.logger.severe("Failed to validate PAT Misc field");
             return false;
@@ -90,7 +91,7 @@ abstract class TivoStreamDecoder {
             return false;
         }
 
-        packet.readUnsignedShortFromData();
+        int streamId = packet.readUnsignedShortFromData();
         sectionLength -= 2;
 
         patData.setVersionNumber(packet.readUnsignedByteFromData() & 0x3E);
@@ -101,21 +102,25 @@ abstract class TivoStreamDecoder {
         sectionLength--;
 
         sectionLength -= 4; // Ignore the CRC
+
         while (sectionLength > 0) {
-            packet.readUnsignedShortFromData();
+            int programNumber = packet.readUnsignedShortFromData();
             sectionLength -= 2;
 
-            // Again?
             patField = packet.readUnsignedShortFromData();
             sectionLength -= 2;
             patData.setProgramMapPid(patField & 0x1fff);
 
             // Create a stream for this PID unless one already exists
             if (!streams.containsKey(patData.getProgramMapPid())) {
-//                System.out.format("Creating a new stream for PMT PID 0x%04x%n", patData.getProgramMapPid());
+                TivoDecoder.logger.info(String.format("Creating a new stream for PMT PID 0x%04x", patData.getProgramMapPid()));
                 TransportStream stream = new TransportStream(outputStream, turingDecoder);
                 streams.put(patData.getProgramMapPid(), stream);
             }
+        }
+        if (sectionLength < 0) {
+            TivoDecoder.logger.severe("Problem parsing PAT: advanced too far in the data stream");
+            return false;
         }
 
         return true;
