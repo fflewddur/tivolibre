@@ -83,7 +83,7 @@ abstract class TivoStreamDecoder {
         int sectionLength = patField & 0x0fff;
 
         if ((patField & 0xC000) != 0x8000) {
-            TivoDecoder.logger.severe("Failed to validate PAT Misc field");
+            TivoDecoder.logger.severe(String.format("Failed to validate PAT Misc field: 0x%04x", patField));
             return false;
         }
         if ((patField & 0x0C00) != 0x0000) {

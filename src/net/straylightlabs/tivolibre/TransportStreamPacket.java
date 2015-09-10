@@ -31,45 +31,44 @@ class TransportStreamPacket {
     private boolean isTivo;
     private Header header;
     private AdaptationField adaptationField;
-    private ByteBuffer headerBuffer;
-    private ByteBuffer data;
+    private ByteBuffer buffer;
+    //    private ByteBuffer data;
     private int dataOffset;
     private int pesHeaderOffset;
 
-    public boolean readFrom(CountingDataInputStream inputStream) throws IOException {
-        header = readHeader(inputStream);
-
-        // Read the rest of the packet
-        int bytesToRead = TransportStream.TS_FRAME_SIZE - header.getLength();
-        int bytesRead, totalBytesRead = 0;
-        byte[] buffer = new byte[bytesToRead];
-
-        do {
-            bytesRead = inputStream.read(buffer, totalBytesRead, bytesToRead - totalBytesRead);
-            totalBytesRead += bytesRead;
-        } while (bytesRead != -1 && bytesToRead > 0 && totalBytesRead < bytesToRead);
-        data = ByteBuffer.wrap(buffer);
-        dataOffset = 0;
-
-        if (totalBytesRead != bytesToRead) {
-            TivoDecoder.logger.severe(String.format("Only read %d of %d bytes", totalBytesRead, bytesToRead));
-        }
-        return (totalBytesRead == bytesToRead);
+    public static TransportStreamPacket createFrom(ByteBuffer source, long packetId) throws IOException {
+        TransportStreamPacket packet = new TransportStreamPacket();
+        packet.setPacketId(packetId);
+        packet.readFrom(source);
+        return packet;
     }
 
-    private Header readHeader(CountingDataInputStream inputStream) throws IOException {
+    public boolean readFrom(ByteBuffer source) throws IOException {
+        // Make a local copy of the buffer
+        buffer = ByteBuffer.allocate(source.capacity());
+        System.arraycopy(source.array(), 0, buffer.array(), 0, source.capacity());
+
+        header = readHeader(buffer);
+        dataOffset = 0;
+
+        return true;
+    }
+
+    private Header readHeader(ByteBuffer source) throws IOException {
         int headerLength = Integer.BYTES;
-        int headerBits = inputStream.readInt();
+        int headerBits = source.getInt();
         int adaptationFieldLength = 0;
         int adaptationFieldBits = 0;
 
         header = new Header(headerBits);
-        checkHeader(header);
+        if (!checkHeader(header)) {
+            throw new IOException("TransportStream appears to be corrupt, cannot find sync bytes");
+        }
 
         if (header.hasAdaptationField) {
-            adaptationFieldLength = inputStream.readUnsignedByte();
+            adaptationFieldLength = source.get() & 0xff;
             if (adaptationFieldLength > 0) {
-                adaptationFieldBits = inputStream.readByte();
+                adaptationFieldBits = source.get() & 0xff;
                 adaptationField = new AdaptationField(adaptationFieldBits);
                 if (adaptationField.isPrivate()) {
                     TivoDecoder.logger.severe("Found private adaptation field data; we don't know how to handle this");
@@ -81,57 +80,44 @@ class TransportStreamPacket {
             }
         }
 
-        headerBuffer = ByteBuffer.allocate(headerLength);
-        headerBuffer.putInt(headerBits);
-        if (header.hasAdaptationField) {
-            headerBuffer.put((byte) adaptationFieldLength);
-            if (adaptationFieldLength > 0) {
-                headerBuffer.put((byte) adaptationFieldBits);
-                for (int i = 0; i < adaptationFieldLength - 1; i++) {
-                    byte b = inputStream.readByte();
-                    headerBuffer.put(b);
-                }
-            }
-        }
         header.setLength(headerLength);
-//        TivoDecoder.logger.info("headerLength: " + headerLength + " adaptationFieldLength: " + adaptationFieldLength);
+
         return header;
     }
 
-    private void checkHeader(Header header) throws IOException {
+    private boolean checkHeader(Header header) {
         if (!header.isValid()) {
             TivoDecoder.logger.severe("Invalid TS packet header");
-            throw new IOException("Invalid TS packet header");
+            return false;
         } else if (header.hasTransportError()) {
             TivoDecoder.logger.severe("Transport error flag set");
-            throw new IOException("Transport error flat set");
+            return false;
         }
+        return true;
     }
 
     public byte[] getBytes() {
-        byte[] buffer = new byte[TransportStream.TS_FRAME_SIZE];
+
         if (isScrambled()) {
             throw new IllegalStateException("Cannot get bytes from scrambled packet");
-        }
-        if (headerBuffer.hasArray() && data.hasArray()) {
-            System.arraycopy(headerBuffer.array(), 0, buffer, 0, header.getLength());
-            System.arraycopy(data.array(), 0, buffer, header.getLength(), data.capacity());
-        } else {
+        } else if (!buffer.hasArray()) {
             throw new IllegalStateException("Cannot get bytes from empty packet");
         }
-        return buffer;
+
+        byte[] bytes = new byte[TransportStream.TS_FRAME_SIZE];
+        System.arraycopy(buffer.array(), 0, bytes, 0, TransportStream.TS_FRAME_SIZE);
+        return bytes;
     }
 
     public byte[] getScrambledBytes(byte[] decrypted) {
-        byte[] buffer = new byte[TransportStream.TS_FRAME_SIZE];
-        if (headerBuffer.hasArray()) {
-            System.arraycopy(headerBuffer.array(), 0, buffer, 0, header.getLength());
-            System.arraycopy(data.array(), 0, buffer, header.getLength(), TransportStream.TS_FRAME_SIZE - decrypted.length - header.getLength());
-            System.arraycopy(decrypted, 0, buffer, header.getLength() + getPesHeaderOffset(), decrypted.length);
+        byte[] bytes = new byte[TransportStream.TS_FRAME_SIZE];
+        if (buffer.hasArray()) {
+            System.arraycopy(buffer.array(), 0, bytes, 0, TransportStream.TS_FRAME_SIZE - decrypted.length);
+            System.arraycopy(decrypted, 0, bytes, header.getLength() + getPesHeaderOffset(), decrypted.length);
         } else {
             throw new IllegalStateException("Cannot get bytes from empty packet");
         }
-        return buffer;
+        return bytes;
     }
 
     public boolean isScrambled() {
@@ -139,8 +125,8 @@ class TransportStreamPacket {
     }
 
     public void clearScrambled() {
-        byte[] headerBytes = headerBuffer.array();
-        headerBytes[3] &= ~(0xC0);
+        byte[] bytes = buffer.array();
+        bytes[3] &= ~(0xC0);
     }
 
     public int getPayloadOffset() {
@@ -175,42 +161,43 @@ class TransportStreamPacket {
         return header.isPayloadStart();
     }
 
-    public int getDataOffset() {
-        return dataOffset;
+//    public int getDataOffset() {
+//        return dataOffset;
+//    }
+
+    public byte[] getData() {
+        return getDataAt(0);
     }
 
-    /**
-     * Returns a read-only view of the @data ByteBuffer, initialized to the start of the buffer.
-     */
-    public ByteBuffer getData() {
-        ByteBuffer readOnlyView = data.asReadOnlyBuffer();
-        readOnlyView.rewind();
-        return readOnlyView;
+    public byte[] getDataAt(int offset) {
+        byte[] data = new byte[TransportStream.TS_FRAME_SIZE - header.getLength() - offset];
+        System.arraycopy(buffer.array(), header.getLength() + offset, data, 0, data.length);
+        return data;
     }
 
     public byte[] readBytesFromData(int length) {
-        byte[] buffer = new byte[length];
-        for (int i = 0; i < length; i++) {
-            buffer[i] = data.get(dataOffset++);
+        byte[] bytes = new byte[length];
+        for (int i = 0; i < length; i++, dataOffset += Byte.BYTES) {
+            bytes[i] = buffer.get(header.getLength() + dataOffset);
         }
-        return buffer;
+        return bytes;
     }
 
     public int readIntFromData() {
-        int val = data.getInt(dataOffset);
-        dataOffset += 4;
+        int val = buffer.getInt(header.getLength() + dataOffset);
+        dataOffset += Integer.BYTES;
         return val;
     }
 
     public int readUnsignedByteFromData() {
-        int val = data.get(dataOffset) & 0xff; // Treat as unsigned byte
-        dataOffset += 1;
+        int val = buffer.get(header.getLength() + dataOffset) & 0xff; // Treat as unsigned byte
+        dataOffset += Byte.BYTES;
         return val;
     }
 
     public int readUnsignedShortFromData() {
-        int val = data.getShort(dataOffset) & 0xffff; // Treat as unsigned short
-        dataOffset += 2;
+        int val = buffer.getShort(header.getLength() + dataOffset) & 0xffff; // Treat as unsigned short
+        dataOffset += Short.BYTES;
         return val;
     }
 
@@ -232,6 +219,21 @@ class TransportStreamPacket {
 
     public boolean isTivo() {
         return isTivo;
+    }
+
+    public String dump() {
+        StringBuilder sb = new StringBuilder();
+        byte[] bytes = buffer.array();
+        sb.append("    ");
+        for (int i = 0; i < bytes.length; i++) {
+            sb.append(String.format("%02x", bytes[i]));
+            if ((i + 1) % 40 == 0) {
+                sb.append("\n    ");
+            } else if ((i + 1) % 4 == 0) {
+                sb.append(" ");
+            }
+        }
+        return sb.toString();
     }
 
     @Override

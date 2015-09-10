@@ -25,6 +25,7 @@ package net.straylightlabs.tivolibre;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 
 class TransportStreamDecoder extends TivoStreamDecoder {
     public TransportStreamDecoder(TuringDecoder decoder, int mpegOffset, CountingDataInputStream inputStream,
@@ -37,16 +38,24 @@ class TransportStreamDecoder extends TivoStreamDecoder {
         try {
             advanceToMpegOffset();
             TivoDecoder.logger.info(String.format("Starting TS processing at position %,d", inputStream.getPosition()));
-            TransportStreamPacket packet = new TransportStreamPacket();
-            while (packet.readFrom(inputStream)) {
-                packet.setPacketId(++packetCounter);
+            ByteBuffer buffer = ByteBuffer.allocate(TransportStream.TS_FRAME_SIZE);
+            while (true) {
+                int bytesRead = inputStream.read(buffer.array());
+                if (bytesRead < TransportStream.TS_FRAME_SIZE) {
+                    throw new EOFException();
+                }
+                TransportStreamPacket packet = TransportStreamPacket.createFrom(buffer, ++packetCounter);
+//                System.out.println("Packet contents:\n" + packet.dump());
+//                packet.setPacketId(++packetCounter);
 //                if (packetCounter > 4) {
 //                    return false;
 //                }
+//                if (packetCounter >=     4734439) {
                 if (packetCounter % 10000 == 0) {
-                    TivoDecoder.logger.info(String.format("PacketId: %,d Type: %s PID: %,d Position after reading: %,d",
+                    TivoDecoder.logger.info(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
                                     packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
                     );
+                    TivoDecoder.logger.info(packet.toString());
                 }
                 switch (packet.getPacketType()) {
                     case PROGRAM_ASSOCIATION_TABLE:
@@ -77,8 +86,8 @@ class TransportStreamDecoder extends TivoStreamDecoder {
                         }
                         break;
                     default:
-                        TivoDecoder.logger.severe("Unsupported packet type: " + packet.getPacketType());
-                        return false;
+                        TivoDecoder.logger.warning("Unsupported packet type: " + packet.getPacketType());
+//                        return false;
                 }
                 TransportStream stream = streams.get(packet.getPID());
                 if (stream == null) {
@@ -88,11 +97,7 @@ class TransportStreamDecoder extends TivoStreamDecoder {
                 } else if (!stream.addPacket(packet)) {
                     return false;
                 }
-
-                packet = new TransportStreamPacket();
             }
-            TivoDecoder.logger.info("Successfully read all packets");
-            return true;
         } catch (EOFException e) {
             TivoDecoder.logger.info("End of file reached");
             return true;

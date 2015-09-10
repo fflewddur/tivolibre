@@ -31,7 +31,6 @@ import java.util.Map;
 
 class TransportStream {
     private final TuringDecoder turingDecoder;
-    //    private final int pid;
     private int streamId;
     private StreamType type;
     private byte[] pesBuffer;
@@ -86,9 +85,9 @@ class TransportStream {
             // Form one contiguous buffer containing all buffered packet payloads
             int pesBufferLen = 0;
             for (TransportStreamPacket p : packets) {
-                ByteBuffer data = p.getData();
-                data.get(pesBuffer, pesBufferLen, data.capacity());
-                pesBufferLen += data.capacity();
+                byte[] data = p.getData();
+                System.arraycopy(data, 0, pesBuffer, pesBufferLen, data.length);
+                pesBufferLen += data.length;
             }
 
             // Scan the contiguous buffer for PES headers
@@ -99,7 +98,6 @@ class TransportStream {
                 return false;
             }
             int pesHeaderLength = pesHeaderLengths.stream().mapToInt(i -> i).sum() / 8;
-//            System.out.format("pesDecodeBufferLen %d, pesHeaderLength %d%n", pesBufferLen, pesHeaderLength);
 
             // Do the PES headers end in this packet ?
             if (pesHeaderLength < pesBufferLen) {
@@ -132,15 +130,12 @@ class TransportStream {
                     }
                 }
             }
-
         } else {
             flushBuffers = true;
             packets.addLast(packet);
         }
 
         if (flushBuffers) {
-//            System.out.println("Flush packets for write");
-
             // Loop through each buffered packet.
             // If it is encrypted, perform decryption and then write it out.
             // Otherwise, just write it out.
@@ -150,24 +145,14 @@ class TransportStream {
                     byte[] packetBytes;
                     if (p.isScrambled()) {
                         p.clearScrambled();
-                        ByteBuffer encryptedData = p.getData();
-//                        System.out.println("encrypted buffer:");
-//                        for (int i = 0; i < encryptedData.capacity(); i++) {
-//                            System.out.format("%02x", encryptedData.get(i));
-//                            if ((i+1) % 40 == 0)
-//                                System.out.format("%n");
-//                        }
-//                        System.out.println();
+                        byte[] encryptedData = p.getData();
 //                        System.out.format("PesHeaderOffset: %d, PayloadOffset: %d, PayloadLength: %d%n",
 //                                p.getPesHeaderOffset(), p.getPayloadOffset(), encryptedData.capacity());
-                        int encryptedLength = encryptedData.capacity() - p.getPesHeaderOffset();
+                        int encryptedLength = encryptedData.length - p.getPesHeaderOffset();
 //                        System.out.format("Decrypting PktID %d : decrypt offset %d len %d%n",
 //                                p.getPacketId(), p.getPayloadOffset() + p.getPesHeaderOffset(), encryptedLength);
                         byte[] data = new byte[encryptedLength];
-                        for (int i = 0; i < p.getPesHeaderOffset(); i++) {
-                            encryptedData.get(); // Advance past PES header
-                        }
-                        encryptedData.get(data);
+                        System.arraycopy(encryptedData, p.getPesHeaderOffset(), data, 0, encryptedLength);
                         if (!decrypt(data)) {
                             TivoDecoder.logger.severe("Decrypting packet failed");
                             return false;
@@ -176,16 +161,6 @@ class TransportStream {
                     } else {
                         packetBytes = p.getBytes();
                     }
-
-//                    System.out.println("payload offset: " + p.getPayloadOffset());
-//                    StringBuilder sb = new StringBuilder();
-//                    int counter = 0;
-//                    for (byte b : packetBytes) {
-//                        sb.append(String.format("%02x", b));
-//                        if (++counter % 40 == 0)
-//                            sb.append("\n    ");
-//                    }
-//                    System.out.println("writing buffer:\n    " + sb.toString());
                     outputStream.write(packetBytes);
                 }
             } catch (Exception e) {
@@ -203,10 +178,8 @@ class TransportStream {
         while (!done && !parser.isEOF()) {
             int headerOffset = parser.nextBits(8);
 //            System.out.format("PES header offset: 0x%x%n", headerOffset);
-//            parser.advanceBits(8); // Skip header offset
 
             if (0x000001 != parser.nextBits(24)) {
-//                System.out.println("done!");
                 done = true;
                 continue;
             }
@@ -216,35 +189,27 @@ class TransportStream {
             parser.clear();
             switch (MpegParser.ControlCode.valueOf(startCode)) {
                 case EXTENSION_START_CODE:
-//                    System.out.println("EXTENSION_START_CODE");
                     len = parser.extensionHeader();
                     break;
                 case GROUP_START_CODE:
-//                    System.out.println("GROUP_START_CODE");
                     len = parser.groupOfPicturesHeader();
                     break;
                 case USER_DATA_START_CODE:
-//                    System.out.println("USER_DATA_START_CODE");
                     len = parser.userData();
                     break;
                 case PICTURE_START_CODE:
-//                    System.out.println("PICTURE_START_CODE");
                     len = parser.pictureHeader();
                     break;
                 case SEQUENCE_HEADER_CODE:
-//                    System.out.println("SEQUENCE_HEADER_CODE");
                     len = parser.sequenceHeader();
                     break;
                 case SEQUENCE_END_CODE:
-//                    System.out.println("SEQUENCE_END_CODE");
                     len = parser.sequenceEnd();
                     break;
                 case ANCILLARY_DATA_CODE:
-//                    System.out.println("ANCILLARY_DATA_CODE");
                     len = parser.ancillaryData();
                     break;
                 default:
-//                    System.out.format("startCode = 0x%03x%n", startCode);
                     if (startCode >= 0x101 && startCode <= 0x1AF) {
                         done = true;
                     } else if ((startCode == 0x1BD) || (startCode >= 0x1C0 && startCode <= 0x1EF)) {
@@ -256,7 +221,6 @@ class TransportStream {
             }
 
             if (len > 0) {
-//                System.out.format("Adding header len (%d)%n", len);
                 pesHeaderLengths.addLast(len);
             }
         }
@@ -265,32 +229,12 @@ class TransportStream {
     }
 
     public boolean decrypt(byte[] buffer) {
-//        System.out.print("Turing key before doHeader(): ");
-//        for (int i = 0; i < 16; i++) {
-//            System.out.format("%02x", turingKey[i]);
-//        }
-//        System.out.println();
-
         if (!doHeader()) {
             TivoDecoder.logger.severe("Problem parsing Turing header");
             return false;
         }
-//        StringBuilder sb = new StringBuilder();
-//        sb.append(String.format("BBB : stream_id 0x%02x, blockno %d%n", streamId, turingBlockNumber));
         TuringStream turingStream = turingDecoder.prepareFrame(streamId, turingBlockNumber);
-//        sb.append(String.format("CCC : stream_id 0x%02x, blockno %d, crypted 0x%08x%n", streamId, turingBlockNumber, turingCrypted));
-//        System.out.print("Turing key before decryptBytes(): ");
-//        for (int i = 0; i < 16; i++) {
-//            System.out.format("%02x", turingKey[i]);
-//        }
-//        System.out.println();
         turingDecoder.decryptBytes(turingStream, buffer);
-//        sb.append(String.format("Buffer: "));
-//        for (byte b : buffer) {
-//            sb.append(String.format("%02X", b));
-//        }
-//        sb.append(String.format("%n"));
-//        System.out.println(sb.toString());
         return true;
     }
 
@@ -312,7 +256,6 @@ class TransportStream {
 
         turingBlockNumber |= (turingKey[0x3] & 0x1f) << 0x3;
         turingBlockNumber |= (turingKey[0x4] & 0xe0) >> 0x5;
-
 
         if ((turingKey[4] & 0x10) == 0)
             noProblems = false;
