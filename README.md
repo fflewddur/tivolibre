@@ -3,6 +3,9 @@ TivoLibre is a Java library for decoding TiVo files to standard MPEG files. It s
 
 TivoLibre is based on TivoDecode 0.4.4.
 
+# Downloading
+The latest release can always be found at https://github.com/fflewddur/tivolibre/releases.
+
 # Command Line Usage
 You can use TivoLibre as a stand-alone command-line app. By default, it will read from standard input and write to standard output. You can specify input and output files with the -i and -o command-line parameters, respectively. You must specify the media access key (MAK) for decoding the provided input file with the -m parameter. For example:
 
