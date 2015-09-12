@@ -22,7 +22,7 @@
 
 package net.straylightlabs.tivolibre;
 
-public class TransportStreamException extends RuntimeException {
+class TransportStreamException extends RuntimeException {
     public TransportStreamException(String msg) {
         super(msg);
     }

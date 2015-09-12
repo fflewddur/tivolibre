@@ -27,7 +27,7 @@ import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.Map;
 
-abstract class TivoStreamDecoder {
+abstract class StreamDecoder {
     protected final TuringDecoder turingDecoder;
     protected final int mpegOffset;
     protected final CountingDataInputStream inputStream;
@@ -37,8 +37,8 @@ abstract class TivoStreamDecoder {
     protected long packetCounter;
     protected PatData patData;
 
-    protected TivoStreamDecoder(TuringDecoder decoder, int mpegOffset, CountingDataInputStream inputStream,
-                                  OutputStream outputStream) {
+    protected StreamDecoder(TuringDecoder decoder, int mpegOffset, CountingDataInputStream inputStream,
+                            OutputStream outputStream) {
         this.turingDecoder = decoder;
         this.mpegOffset = mpegOffset;
         this.inputStream = inputStream;

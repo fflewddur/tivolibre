@@ -94,10 +94,10 @@ class TransportStreamPacket {
 
     private boolean checkHeader(Header header) {
         if (!header.isValid()) {
-            TivoDecoder.logger.severe("Invalid TS packet header for packet " + packetId);
+            TivoDecoder.logger.warning("Invalid TS packet header for packet " + packetId);
             return false;
         } else if (header.hasTransportError()) {
-            TivoDecoder.logger.severe("Transport error flag set for packet " + packetId);
+            TivoDecoder.logger.warning("Transport error flag set for packet " + packetId);
             return false;
         }
         return true;

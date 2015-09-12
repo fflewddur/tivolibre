@@ -25,24 +25,23 @@ package net.straylightlabs.tivolibre;
 import java.io.OutputStream;
 import java.util.*;
 
-class TransportStream {
+class TransportStream extends Stream {
+    private final OutputStream outputStream;
     private final TuringDecoder turingDecoder;
-    private int streamId;
     private StreamType type;
     private byte[] pesBuffer;
     private int pesBufferLength;
-    private byte[] turingKey;
-    private int turingBlockNumber;
+
     private final Deque<TransportStreamPacket> packets;
     private final Deque<Integer> pesHeaderLengths;
-    private final OutputStream outputStream;
 
     public static final int FRAME_SIZE = 188;
 
     public TransportStream(OutputStream outputStream, TuringDecoder decoder) {
-        this.type = StreamType.NONE;
+        super();
         this.outputStream = outputStream;
         this.turingDecoder = decoder;
+        this.type = StreamType.NONE;
         pesBuffer = new byte[FRAME_SIZE * 10];
         packets = new ArrayDeque<>();
         pesHeaderLengths = new ArrayDeque<>();
@@ -53,16 +52,12 @@ class TransportStream {
         this.type = type;
     }
 
-    public void setStreamId(int val) {
-        streamId = val;
+    public void setKey(byte[] val) {
+        turingKey = val;
     }
 
     public StreamType getType() {
         return type;
-    }
-
-    public void setKey(byte[] val) {
-        turingKey = val;
     }
 
     public boolean addPacket(TransportStreamPacket packet) {
@@ -214,45 +209,6 @@ class TransportStream {
         TuringStream turingStream = turingDecoder.prepareFrame(streamId, turingBlockNumber);
         turingDecoder.decryptBytes(turingStream, buffer);
         return true;
-    }
-
-    private boolean doHeader() {
-        boolean noProblems = true;
-
-        if ((turingKey[0] & 0x80) == 0)
-            noProblems = false;
-
-        if ((turingKey[1] & 0x40) == 0)
-            noProblems = false;
-
-        turingBlockNumber = (turingKey[0x1] & 0x3f) << 0x12;
-        turingBlockNumber |= (turingKey[0x2] & 0xff) << 0xa;
-        turingBlockNumber |= (turingKey[0x3] & 0xc0) << 0x2;
-
-        if ((turingKey[3] & 0x20) == 0)
-            noProblems = false;
-
-        turingBlockNumber |= (turingKey[0x3] & 0x1f) << 0x3;
-        turingBlockNumber |= (turingKey[0x4] & 0xe0) >> 0x5;
-
-        if ((turingKey[4] & 0x10) == 0)
-            noProblems = false;
-
-//        turingCrypted = (turingKey[0xb] & 0x03) << 0x1e;
-//        turingCrypted |= (turingKey[0xc] & 0xff) << 0x16;
-//        turingCrypted |= (turingKey[0xd] & 0xfc) << 0xe;
-
-        if ((turingKey[0xd] & 0x2) == 0)
-            noProblems = false;
-
-//        turingCrypted |= (turingKey[0xd] & 0x01) << 0xf;
-//        turingCrypted |= (turingKey[0xe] & 0xff) << 0x7;
-//        turingCrypted |= (turingKey[0xf] & 0xfe) >> 0x1;
-
-        if ((turingKey[0xf] & 0x1) == 0)
-            noProblems = false;
-
-        return noProblems;
     }
 
     private boolean decryptAndFlushBuffers() {

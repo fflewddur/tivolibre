@@ -28,12 +28,12 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.logging.Level;
 
-class TransportStreamDecoder extends TivoStreamDecoder {
+class TransportStreamDecoder extends StreamDecoder {
     private ByteBuffer inputBuffer;
     private int extraBufferSize;
 
     private static final byte SYNC_BYTE_VALUE = 0x47;
-    private static final int PACKETS_UNTIL_RESYNC = 5;
+    private static final int PACKETS_UNTIL_RESYNC = 4;
 
     public TransportStreamDecoder(TuringDecoder decoder, int mpegOffset, CountingDataInputStream inputStream,
                                   OutputStream outputStream) {
@@ -141,7 +141,7 @@ class TransportStreamDecoder extends TivoStreamDecoder {
      */
     private TransportStreamPacket createPacketAtNextSyncByte(long nextPacketId) throws IOException {
         TransportStreamPacket packet = null;
-        int pos = 0;
+        int pos = 1; // Ensure we pass the start of the frame with the invalid sync byte or error flag set
         inputBuffer.rewind();
         while (packet == null) {
             if (pos == inputBuffer.capacity()) {
@@ -294,9 +294,9 @@ class TransportStreamDecoder extends TivoStreamDecoder {
     }
 
     private boolean processTivoPacket(TransportStreamPacket packet) {
-        int filetype = packet.readIntFromData();
-        if (filetype != 0x5469566f) {
-            TivoDecoder.logger.severe(String.format("Invalid TiVo private data filetype: 0x%08x", filetype));
+        int fileType = packet.readIntFromData();
+        if (fileType != 0x5469566f) {
+            TivoDecoder.logger.severe(String.format("Invalid TiVo private data fileType: 0x%08x", fileType));
             return false;
         }
 

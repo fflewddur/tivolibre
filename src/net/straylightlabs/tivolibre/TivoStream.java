@@ -69,7 +69,7 @@ class TivoStream {
                 TivoDecoder.logger.info(String.format("Chunk %d: %s", i, chunks[i]));
             }
 
-            TivoStreamDecoder streamDecoder;
+            StreamDecoder streamDecoder;
             TivoDecoder.logger.info("File format: " + header.getFormat());
             switch (header.getFormat()) {
                 case PROGRAM_STREAM:
