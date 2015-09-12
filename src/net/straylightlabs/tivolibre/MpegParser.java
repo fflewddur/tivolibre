@@ -25,16 +25,17 @@ package net.straylightlabs.tivolibre;
 import java.nio.ByteBuffer;
 
 class MpegParser {
-    private ByteBuffer buffer;
+    private final ByteBuffer buffer;
+    private final int bufferLength;
     private int headerLength;
     private long bitPos;
     private boolean isEOF;
 
-    private static final int BITS_PER_BYTE = 8;
+    public static final int BITS_PER_BYTE = 8;
 
-    public MpegParser(byte[] buffer) {
+    public MpegParser(byte[] buffer, int bufferLength) {
         this.buffer = ByteBuffer.wrap(buffer);
-        headerLength = 0;
+        this.bufferLength = bufferLength;
     }
 
     public boolean isEOF() {
@@ -44,7 +45,7 @@ class MpegParser {
     public void advanceBits(long bits) {
         bitPos += bits;
         headerLength += bits;
-        if (bitPos >= buffer.capacity() * BITS_PER_BYTE) {
+        if (bitPos >= bufferLength * BITS_PER_BYTE) {
             isEOF = true;
         }
     }
@@ -90,12 +91,12 @@ class MpegParser {
     }
 
     public int readByte(long offset) {
-        try {
-            return buffer.get((int) (offset / BITS_PER_BYTE)) & 0xff; // Treat the value as an unsigned int
-        } catch (IndexOutOfBoundsException e) {
+        int byteOffset = (int)(offset / BITS_PER_BYTE);
+        if (byteOffset >= bufferLength) {
             isEOF = true;
             return 0;
         }
+        return buffer.get(byteOffset) & 0xff; // Treat the value as an unsigned int
     }
 
     private boolean byteAligned() {

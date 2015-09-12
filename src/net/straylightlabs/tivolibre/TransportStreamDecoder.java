@@ -26,6 +26,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.logging.Level;
 
 class TransportStreamDecoder extends TivoStreamDecoder {
     private ByteBuffer inputBuffer;
@@ -58,18 +59,15 @@ class TransportStreamDecoder extends TivoStreamDecoder {
                     TivoDecoder.logger.info("Re-synched!");
                 }
 
-//                System.out.println("Packet contents:\n" + packet.dump());
-//                packet.setPacketId(++packetCounter);
-//                if (packetCounter > 6000000) {
-//                    return false;
-//                }
-//                if (packetCounter >= 4730000) {
+//                if (packetCounter >= 28770) {
                 if (packetCounter % 10000 == 0) {
                     TivoDecoder.logger.info(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
                                     packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
                     );
                     TivoDecoder.logger.info(packet.toString());
+//                    TivoDecoder.logger.info("Packet data:\n" + packet.dump());
                 }
+
                 switch (packet.getPacketType()) {
                     case PROGRAM_ASSOCIATION_TABLE:
                         if (!processPatPacket(packet)) {
@@ -204,6 +202,7 @@ class TransportStreamDecoder extends TivoStreamDecoder {
     }
 
     private boolean processPmtPacket(TransportStreamPacket packet) {
+//        TivoDecoder.logger.fine(packet.toString());
         if (packet.isPayloadStart()) {
             // Advance past pointer field
             packet.advanceDataOffset(1);
@@ -226,7 +225,9 @@ class TransportStreamDecoder extends TivoStreamDecoder {
 
         int programNumber = packet.readUnsignedShortFromData();
         sectionLength -= 2;
-        packet.advanceDataOffset(1);
+        int versionAndNextField = packet.readUnsignedByteFromData();
+        int version = versionAndNextField & 0x3e;
+        boolean currentNextIndicator = (versionAndNextField & 0x01) == 0x01;
         sectionLength -= 1;
         int sectionNumber = packet.readUnsignedByteFromData();
         sectionLength--;
@@ -237,12 +238,16 @@ class TransportStreamDecoder extends TivoStreamDecoder {
         int programInfoLength = packet.readUnsignedShortFromData() & 0x0fff;
         sectionLength -= 2;
 
+        TivoDecoder.logger.fine(
+                String.format("Program number: 0x%04x Section number: 0x%02x Last section number: 0x%02x " + "" +
+                                "Version: 0x%02x CurrentNextIndicator: %s PCR PID: 0x%04x",
+                        programNumber, sectionNumber, lastSectionNumber, version, currentNextIndicator, pcrPid));
         if (programInfoLength > 0) {
-            TivoDecoder.logger.info(String.format("Skipping %d bytes of descriptors", programInfoLength));
+            TivoDecoder.logger.fine(String.format("Skipping %d bytes of descriptors", programInfoLength));
             packet.advanceDataOffset(programInfoLength);
         }
 
-        // Ignore the CRC
+        // Ignore the CRC at the end
         sectionLength -= 4;
 
         while (sectionLength > 0) {
@@ -265,10 +270,15 @@ class TransportStreamDecoder extends TivoStreamDecoder {
                 int length = packet.readUnsignedByteFromData();
                 esInfoLength--;
                 sectionLength--;
-                for (int i = 0; i < length; i++) {
-                    int val = packet.readUnsignedByteFromData();
-                    esInfoLength--;
-                    sectionLength--;
+                if (TivoDecoder.logger.getLevel() == Level.FINE) {
+                    StringBuilder sb = new StringBuilder();
+                    for (int i = 0; i < length; i++) {
+                        int val = packet.readUnsignedByteFromData();
+                        sb.append(String.format("%02x", val & 0xff));
+                        esInfoLength--;
+                        sectionLength--;
+                    }
+                    TivoDecoder.logger.fine(String.format("ES tag: 0x%02x length: 0x%02x content: 0x%s", tag, length, sb.toString()));
                 }
             }
 
@@ -284,14 +294,20 @@ class TransportStreamDecoder extends TivoStreamDecoder {
     }
 
     private boolean processTivoPacket(TransportStreamPacket packet) {
-        int validator = packet.readIntFromData();
-        if (validator != 0x5469566f) {
-            TivoDecoder.logger.severe(String.format("Invalid TiVo private data validator: %08x", validator));
+        int filetype = packet.readIntFromData();
+        if (filetype != 0x5469566f) {
+            TivoDecoder.logger.severe(String.format("Invalid TiVo private data filetype: 0x%08x", filetype));
             return false;
         }
 
-        // Advance past unknown bytes
-        packet.advanceDataOffset(5);
+        int validator = packet.readUnsignedShortFromData();
+        if (validator != 0x8103) {
+            TivoDecoder.logger.severe(String.format("Invalid TiVo private data validator: 0x%04x", validator));
+        }
+
+        int unknown1 = packet.readUnsignedShortFromData();
+        int unknown2 = packet.readUnsignedByteFromData();
+        TivoDecoder.logger.fine(String.format("Unknown1 = 0x%04x Unknown2 = 0x%02x", unknown1, unknown2));
 
         int streamLength = packet.readUnsignedByteFromData();
         while (streamLength > 0) {

@@ -65,4 +65,22 @@ public class TivoDecoder {
     public static void setLoggerLevel(Level level) {
         logger.setLevel(level);
     }
+
+    public static String bytesToHexString(byte[] bytes, int offset, int length) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("    ");
+        for (int i = offset; i < offset + length; i++) {
+            sb.append(String.format("%02X", bytes[i]));
+            if ((i + 1) % 40 == 0) {
+                sb.append("\n    ");
+            } else if ((i + 1) % 4 == 0) {
+                sb.append(" ");
+            }
+        }
+        return sb.toString();
+    }
+
+    public static String bytesToHexString(byte[] bytes) {
+        return bytesToHexString(bytes, 0, bytes.length);
+    }
 }

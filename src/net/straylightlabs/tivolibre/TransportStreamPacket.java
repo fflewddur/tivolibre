@@ -229,18 +229,7 @@ class TransportStreamPacket {
     }
 
     public String dump() {
-        StringBuilder sb = new StringBuilder();
-        byte[] bytes = buffer.array();
-        sb.append("    ");
-        for (int i = 0; i < bytes.length; i++) {
-            sb.append(String.format("%02x", bytes[i]));
-            if ((i + 1) % 40 == 0) {
-                sb.append("\n    ");
-            } else if ((i + 1) % 4 == 0) {
-                sb.append(" ");
-            }
-        }
-        return sb.toString();
+        return TivoDecoder.bytesToHexString(buffer.array());
     }
 
     @Override
@@ -352,11 +341,11 @@ class TransportStreamPacket {
             return isScrambled;
         }
 
-//        public boolean isHasAdaptationField() {
+//        public boolean hasAdaptationField() {
 //            return hasAdaptationField;
 //        }
 
-//        public boolean isHasPayloadData() {
+//        public boolean hasPayloadData() {
 //            return hasPayloadData;
 //        }
 

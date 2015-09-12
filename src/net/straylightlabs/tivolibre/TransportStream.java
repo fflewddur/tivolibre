@@ -23,16 +23,14 @@
 package net.straylightlabs.tivolibre;
 
 import java.io.OutputStream;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 class TransportStream {
     private final TuringDecoder turingDecoder;
     private int streamId;
     private StreamType type;
     private byte[] pesBuffer;
+    private int pesBufferLength;
     private byte[] turingKey;
     private int turingBlockNumber;
     private final Deque<TransportStreamPacket> packets;
@@ -68,66 +66,24 @@ class TransportStream {
     }
 
     public boolean addPacket(TransportStreamPacket packet) {
-        boolean flushBuffers = false;
+        boolean flushBuffers;
 
         // If this packet's Payload Unit Start Indicator is set,
         // or one of the stream's previous packet's was set, we
         // need to buffer the packet, such that we can make an
         // attempt to determine where the end of the PES headers
-        // lies.   Only after we've done that, can we determine
+        // lies. Only after we've done that can we determine
         // the packet offset at which decryption is to occur.
-        // The accounts for the situation where the PES headers
-        // straddles two packets, and decryption is needed on the 2nd.
+        // This accounts for the situation where the PES headers
+        // straddles two packets and decryption is needed on the 2nd.
         if (packet.isPayloadStart() || packets.size() != 0) {
             packets.addLast(packet);
 
-            // Form one contiguous buffer containing all buffered packet payloads
-            int pesBufferLen = 0;
-            for (TransportStreamPacket p : packets) {
-                byte[] data = p.getData();
-                System.arraycopy(data, 0, pesBuffer, pesBufferLen, data.length);
-                pesBufferLen += data.length;
-            }
-
-            // Scan the contiguous buffer for PES headers
-            // in order to find the end of PES headers.
-            pesHeaderLengths.clear();
-            if (!getPesHeaderLength(pesBuffer)) {
-                TivoDecoder.logger.severe(String.format("Failed to parse PES headers for packet %d%n", packet.getPacketId()));
+            try {
+                combineBufferedPacketPayloads();
+                flushBuffers = calculatePesHeaderOffset(packet);
+            } catch (RuntimeException e) {
                 return false;
-            }
-            int pesHeaderLength = pesHeaderLengths.stream().mapToInt(i -> i).sum() / 8;
-
-            // Do the PES headers end in this packet ?
-            if (pesHeaderLength < pesBufferLen) {
-                flushBuffers = true;
-
-                // For each packet, set the end point for PES headers in that packet
-                for (TransportStreamPacket p : packets) {
-                    while (!pesHeaderLengths.isEmpty()) {
-                        int headerLen = pesHeaderLengths.removeFirst() / 8;
-                        if (headerLen + p.getPayloadOffset() + p.getPesHeaderOffset() < FRAME_SIZE) {
-                            p.setPesHeaderOffset(p.getPesHeaderOffset() + headerLen);
-                            pesHeaderLength -= headerLen;
-                        } else {
-                            // Packet boundary occurs within this PES header
-                            // Three cases to handle :
-                            //   1. pkt boundary falls within startCode
-                            //        start decrypt after startCode finish in NEXT pkt
-                            //   2. pkt boundary falls between startCode and payload
-                            //        start decrypt at payload start in NEXT pkt
-                            //   3. pkt boundary falls within payload
-                            //        start decrypt offset into the payload
-                            int packetBoundaryOffset = FRAME_SIZE - p.getPayloadOffset() - p.getPesHeaderOffset();
-                            if (packetBoundaryOffset < 4) {
-                                headerLen -= packetBoundaryOffset;
-                                headerLen *= 8;
-                                pesHeaderLengths.addFirst(headerLen);
-                            }
-                            break;
-                        }
-                    }
-                }
             }
         } else {
             flushBuffers = true;
@@ -135,35 +91,7 @@ class TransportStream {
         }
 
         if (flushBuffers) {
-            // Loop through each buffered packet.
-            // If it is encrypted, perform decryption and then write it out.
-            // Otherwise, just write it out.
-            try {
-                while (!packets.isEmpty()) {
-                    TransportStreamPacket p = packets.removeFirst();
-                    byte[] packetBytes;
-                    if (p.isScrambled()) {
-                        p.clearScrambled();
-                        byte[] encryptedData = p.getData();
-//                        System.out.format("PesHeaderOffset: %d, PayloadOffset: %d, PayloadLength: %d%n",
-//                                p.getPesHeaderOffset(), p.getPayloadOffset(), encryptedData.capacity());
-                        int encryptedLength = encryptedData.length - p.getPesHeaderOffset();
-//                        System.out.format("Decrypting PktID %d : decrypt offset %d len %d%n",
-//                                p.getPacketId(), p.getPayloadOffset() + p.getPesHeaderOffset(), encryptedLength);
-                        byte[] data = new byte[encryptedLength];
-                        System.arraycopy(encryptedData, p.getPesHeaderOffset(), data, 0, encryptedLength);
-                        if (!decrypt(data)) {
-                            TivoDecoder.logger.severe("Decrypting packet failed");
-                            return false;
-                        }
-                        packetBytes = p.getScrambledBytes(data);
-                    } else {
-                        packetBytes = p.getBytes();
-                    }
-                    outputStream.write(packetBytes);
-                }
-            } catch (Exception e) {
-                TivoDecoder.logger.severe("Error writing file: " + e.getLocalizedMessage());
+            if (!decryptAndFlushBuffers()) {
                 return false;
             }
         }
@@ -171,13 +99,64 @@ class TransportStream {
         return true;
     }
 
-    private boolean getPesHeaderLength(byte[] buffer) {
-        MpegParser parser = new MpegParser(buffer);
-        boolean done = false;
-        while (!done && !parser.isEOF()) {
-            int headerOffset = parser.nextBits(8);
-//            System.out.format("PES header offset: 0x%x%n", headerOffset);
+    /**
+     * Form one contiguous buffer containing all buffered packet payloads
+     */
+    private void combineBufferedPacketPayloads() {
+        pesBufferLength = 0;
+        packets.stream().forEach(p -> {
+            byte[] data = p.getData();
+            System.arraycopy(data, 0, pesBuffer, pesBufferLength, data.length);
+            pesBufferLength += data.length;
+        });
+    }
 
+    /**
+     * Figure out the PES header offset for each packet. We don't decrypt PES headers, so we need to know exactly
+     * where in the buffer to start the decrypt process.
+     * @return True if we should flush our buffer after processing this packet.
+     */
+    private boolean calculatePesHeaderOffset(TransportStreamPacket packet) {
+        boolean flushBuffers = false;
+
+        // Scan the contiguous buffer for PES headers in order to find the end of PES headers.
+        pesHeaderLengths.clear();
+        if (!getPesHeaderLengths(pesBuffer, pesBufferLength)) {
+            TivoDecoder.logger.severe(String.format("Failed to parse PES headers after adding packet %d%n", packet.getPacketId()));
+            throw new RuntimeException();
+        }
+
+        int sumOfPesHeaderLengths = pesHeaderLengths.stream().mapToInt(i -> i).sum() / MpegParser.BITS_PER_BYTE;
+
+        if (sumOfPesHeaderLengths < pesBufferLength) {
+            // The PES headers end in this packet
+            flushBuffers = true;
+
+            Iterator<TransportStreamPacket> iterator = packets.iterator();
+            TransportStreamPacket p = iterator.next();
+            while (sumOfPesHeaderLengths > 0) {
+                int payloadLength = TransportStream.FRAME_SIZE - p.getPayloadOffset();
+                if (sumOfPesHeaderLengths >= payloadLength) {
+                    // PES headers occupy this entire packet
+                    p.setPesHeaderOffset(payloadLength);
+                    p = iterator.next();
+                    sumOfPesHeaderLengths -= payloadLength;
+                } else {
+                    // PES headers end in this packet
+                    p.setPesHeaderOffset(sumOfPesHeaderLengths);
+                    sumOfPesHeaderLengths = 0;
+                }
+            }
+        }
+
+        return flushBuffers;
+    }
+
+    private boolean getPesHeaderLengths(byte[] buffer, int bufferLength) {
+        MpegParser parser = new MpegParser(buffer, bufferLength);
+        boolean done = false;
+
+        while (!done && !parser.isEOF()) {
             if (0x000001 != parser.nextBits(24)) {
                 done = true;
                 continue;
@@ -219,7 +198,7 @@ class TransportStream {
                     }
             }
 
-            if (len > 0) {
+            if (len != 0) {
                 pesHeaderLengths.addLast(len);
             }
         }
@@ -274,6 +253,38 @@ class TransportStream {
             noProblems = false;
 
         return noProblems;
+    }
+
+    private boolean decryptAndFlushBuffers() {
+        // Loop through each buffered packet. If it's encrypted, decrypt it and write it out.
+        // Otherwise, just write it out.
+        try {
+            while (!packets.isEmpty()) {
+                TransportStreamPacket p = packets.removeFirst();
+                byte[] packetBytes;
+                if (p.isScrambled()) {
+                    p.clearScrambled();
+                    byte[] encryptedData = p.getData();
+                    int encryptedLength = encryptedData.length - p.getPesHeaderOffset();
+                    byte[] data = new byte[encryptedLength];
+                    System.arraycopy(encryptedData, p.getPesHeaderOffset(), data, 0, encryptedLength);
+                    if (!decrypt(data)) {
+                        TivoDecoder.logger.severe("Decrypting packet failed");
+                        return false;
+                    }
+//                    TivoDecoder.logger.info("Decrypted data:\n" + TivoDecoder.bytesToHexString(data));
+                    packetBytes = p.getScrambledBytes(data);
+                } else {
+                    packetBytes = p.getBytes();
+                }
+                outputStream.write(packetBytes);
+            }
+        } catch (Exception e) {
+            TivoDecoder.logger.severe("Error writing file: " + e.getLocalizedMessage());
+            return false;
+        }
+
+        return true;
     }
 
     public enum StreamType {
