@@ -97,12 +97,12 @@ class TransportStreamDecoder extends StreamDecoder {
                         }
                         break;
                     case NULL:
-                        // These packets are for maintaining a constant bit-rate and are meant to be discarded
+                        // These packets are for maintaining a constant bit-rate; just copy them through to the output.
                         TivoDecoder.logger.info("NULL packet");
-                        continue;
+                        break;
                     default:
                         TivoDecoder.logger.warning("Unsupported packet type: " + packet.getPacketType());
-//                        return false;
+                        return false;
                 }
 
                 if (!addPacketToStream(packet)) {
@@ -263,7 +263,6 @@ class TransportStreamDecoder extends StreamDecoder {
             sectionLength -= 2;
             int esInfoLength = pmtField & 0x0fff;
             while (esInfoLength > 0) {
-                // TODO Not sure if we need to do anything with these streams.
                 int tag = packet.readUnsignedByteFromData();
                 esInfoLength--;
                 sectionLength--;
@@ -335,10 +334,13 @@ class TransportStreamDecoder extends StreamDecoder {
     private boolean addPacketToStream(TransportStreamPacket packet) {
         TransportStream stream = streams.get(packet.getPID());
         if (stream == null) {
-            TivoDecoder.logger.warning(String.format("No TransportStream exists with PID 0x%04x, ignoring packet",
+            TivoDecoder.logger.warning(String.format("No TransportStream exists with PID 0x%04x, creating one",
                             packet.getPID())
             );
-        } else if (!stream.addPacket(packet)) {
+            stream =new TransportStream(outputStream, turingDecoder);
+            streams.put(packet.getPID(), stream);
+        }
+        if (!stream.addPacket(packet)) {
             return false;
         }
         return true;
