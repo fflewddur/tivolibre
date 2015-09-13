@@ -116,7 +116,7 @@ public class PesHeader {
 //                    startCodePrefix, startCodeValue, bitPos));
         }
 
-        TivoDecoder.logger.info("End of PES header. Bit length = " + bitLength);
+//        TivoDecoder.logger.info("End of PES header. Bit length = " + bitLength);
     }
 
     /**
@@ -136,7 +136,7 @@ public class PesHeader {
             }
         } catch (BufferUnderflowException e) {
             // Ran out of buffer
-            TivoDecoder.logger.info("Ran out of buffer");
+//            TivoDecoder.logger.info("Ran out of buffer");
         }
         return startCodePrefix == START_CODE_PREFIX;
     }

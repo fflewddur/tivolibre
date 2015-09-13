@@ -70,7 +70,7 @@ class TransportStreamDecoder extends StreamDecoder {
                                     packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
                     );
                     TivoDecoder.logger.info(packet.toString());
-                    TivoDecoder.logger.info("Packet data:\n" + packet.dump());
+//                    TivoDecoder.logger.info("Packet data:\n" + packet.dump());
                 }
 
                 switch (packet.getPacketType()) {
