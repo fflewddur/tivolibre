@@ -31,6 +31,7 @@ import java.util.logging.Level;
 class TransportStreamDecoder extends StreamDecoder {
     private ByteBuffer inputBuffer;
     private int extraBufferSize;
+    private long bytesWritten;
 
     private static final byte SYNC_BYTE_VALUE = 0x47;
     private static final int PACKETS_UNTIL_RESYNC = 4;
@@ -50,22 +51,26 @@ class TransportStreamDecoder extends StreamDecoder {
             while (true) {
                 fillBuffer();
 
+//                if (bytesWritten > 19721212) {
+//                    return false;
+//                }
+
                 TransportStreamPacket packet;
                 try {
                     packet = TransportStreamPacket.createFrom(inputBuffer, ++packetCounter);
                 } catch (TransportStreamException e) {
-                    TivoDecoder.logger.severe(e.getLocalizedMessage());
+                    TivoDecoder.logger.warning(e.getLocalizedMessage());
                     packet = createPacketAtNextSyncByte(++packetCounter);
                     TivoDecoder.logger.info("Re-synched!");
                 }
 
-//                if (packetCounter >= 28770) {
-                if (packetCounter % 10000 == 0) {
+                if (TivoDecoder.logger.getLevel() == Level.INFO && packetCounter % 10000 == 0) {
+//                if (bytesWritten > 19720000) {
                     TivoDecoder.logger.info(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
                                     packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
                     );
                     TivoDecoder.logger.info(packet.toString());
-//                    TivoDecoder.logger.info("Packet data:\n" + packet.dump());
+                    TivoDecoder.logger.info("Packet data:\n" + packet.dump());
                 }
 
                 switch (packet.getPacketType()) {
@@ -105,9 +110,7 @@ class TransportStreamDecoder extends StreamDecoder {
                         return false;
                 }
 
-                if (!addPacketToStream(packet)) {
-                    return false;
-                }
+                bytesWritten += addPacketToStream(packet);
             }
         } catch (EOFException e) {
             TivoDecoder.logger.info("End of file reached");
@@ -141,22 +144,23 @@ class TransportStreamDecoder extends StreamDecoder {
      */
     private TransportStreamPacket createPacketAtNextSyncByte(long nextPacketId) throws IOException {
         TransportStreamPacket packet = null;
-        int pos = 1; // Ensure we pass the start of the frame with the invalid sync byte or error flag set
-        inputBuffer.rewind();
+        int startPos = inputBuffer.position();
+        int currentPos = startPos + 1; // Ensure we pass the start of the frame with the invalid sync byte or error flag set
+//        inputBuffer.rewind();
         while (packet == null) {
-            if (pos == inputBuffer.capacity()) {
+            if (currentPos == inputBuffer.capacity()) {
                 resizeAndFillInputBuffer(inputBuffer.capacity() + TransportStream.FRAME_SIZE);
             }
-            if (inputBuffer.get(pos) == SYNC_BYTE_VALUE) {
+            if (inputBuffer.get(currentPos) == SYNC_BYTE_VALUE) {
                 int syncedPackets = 0;
                 for (int i = 1; i <= PACKETS_UNTIL_RESYNC; i++) {
-                    int nextSyncPos = pos + (i * TransportStream.FRAME_SIZE);
+                    int nextSyncPos = currentPos + (i * TransportStream.FRAME_SIZE);
                     int neededBytes = (nextSyncPos - inputBuffer.capacity()) + 1;
                     if (neededBytes > 0) {
                         resizeAndFillInputBuffer(inputBuffer.capacity() + neededBytes);
                     }
                     if (inputBuffer.get(nextSyncPos) != 0x47) {
-                        // Nope, can't resynchronize from @pos
+                        // Nope, can't resynchronize from @currentPos
                         break;
                     } else {
                         syncedPackets++;
@@ -165,14 +169,15 @@ class TransportStreamDecoder extends StreamDecoder {
 
                 if (syncedPackets == PACKETS_UNTIL_RESYNC) {
                     // Looks like we re-synchronized!
-                    inputBuffer.position(pos);
+                    outputUnsynchronizedBytes(startPos, currentPos);
+                    inputBuffer.position(currentPos);
                     packet = TransportStreamPacket.createFrom(inputBuffer, nextPacketId);
                     // Read the rest of the following packet into our buffer
                     resizeAndFillInputBuffer(inputBuffer.capacity() + (TransportStream.FRAME_SIZE - 1));
-                    extraBufferSize = inputBuffer.capacity() - pos - TransportStream.FRAME_SIZE;
+                    extraBufferSize = inputBuffer.capacity() - currentPos - TransportStream.FRAME_SIZE;
                 }
             }
-            pos++;
+            currentPos++;
         }
         return packet;
     }
@@ -201,8 +206,11 @@ class TransportStreamDecoder extends StreamDecoder {
         inputBuffer = newBuffer;
     }
 
+    private void outputUnsynchronizedBytes(int offset, int length) throws IOException {
+        // The TiVo DirectShow filter includes these bytes in the output, so we will, too.
+        outputStream.write(inputBuffer.array(), offset, length);
+    }
     private boolean processPmtPacket(TransportStreamPacket packet) {
-//        TivoDecoder.logger.fine(packet.toString());
         if (packet.isPayloadStart()) {
             // Advance past pointer field
             packet.advanceDataOffset(1);
@@ -331,7 +339,7 @@ class TransportStreamDecoder extends StreamDecoder {
         return true;
     }
 
-    private boolean addPacketToStream(TransportStreamPacket packet) {
+    private int addPacketToStream(TransportStreamPacket packet) {
         TransportStream stream = streams.get(packet.getPID());
         if (stream == null) {
             TivoDecoder.logger.warning(String.format("No TransportStream exists with PID 0x%04x, creating one",
@@ -340,9 +348,6 @@ class TransportStreamDecoder extends StreamDecoder {
             stream =new TransportStream(outputStream, turingDecoder);
             streams.put(packet.getPID(), stream);
         }
-        if (!stream.addPacket(packet)) {
-            return false;
-        }
-        return true;
+        return stream.writePacket(packet);
     }
 }
