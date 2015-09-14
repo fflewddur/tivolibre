@@ -36,14 +36,13 @@ class TransportStream extends Stream {
     private int nextPacketPesOffset;
 
     public static final int FRAME_SIZE = 188;
-    private static final int PES_BUFFER_SIZE = FRAME_SIZE * 10; // TODO Make this dynamically resizeable?
 
     public TransportStream(OutputStream outputStream, TuringDecoder decoder) {
         super();
         this.outputStream = outputStream;
         this.turingDecoder = decoder;
         this.type = StreamType.NONE;
-        pesBufferArray = new byte[PES_BUFFER_SIZE];
+        pesBufferArray = new byte[FRAME_SIZE];
         pesBuffer = ByteBuffer.wrap(pesBufferArray);
     }
 
@@ -69,6 +68,11 @@ class TransportStream extends Stream {
             calculatePesHeaderOffset(packet);
         } catch (RuntimeException e) {
             TivoDecoder.logger.severe("Exception while calculating PES header offset: " + e.getLocalizedMessage());
+            e.printStackTrace();
+            TivoDecoder.logger.info(packet.toString());
+            TivoDecoder.logger.info(String.format("Packet data:%n%s", TivoDecoder.bytesToHexString(packet.getBytes())));
+            TivoDecoder.logger.info(String.format("PES buffer:%n%s", TivoDecoder.bytesToHexString(pesBufferArray, 0, pesBuffer.limit())));
+            System.exit(0);
             throw e;
         }
 
@@ -83,6 +87,7 @@ class TransportStream extends Stream {
         System.arraycopy(data, 0, pesBufferArray, 0, data.length);
         pesBuffer.position(0);
         pesBuffer.limit(data.length);
+
     }
 
     /**
@@ -104,16 +109,8 @@ class TransportStream extends Stream {
     }
 
     private int getPesHeaderLength() {
-        try {
-            PesHeader pesHeader = PesHeader.createFrom(pesBuffer);
-            return pesHeader.size();
-        } catch (Exception e) {
-            TivoDecoder.logger.severe("Exception: " + e);
-            e.printStackTrace();
-            System.exit(0);
-        }
-
-        return 0;
+        PesHeader pesHeader = PesHeader.createFrom(pesBuffer);
+        return pesHeader.size();
     }
 
     public boolean decrypt(byte[] buffer) {

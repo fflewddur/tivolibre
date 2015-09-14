@@ -219,17 +219,8 @@ public class PesHeader {
     }
 
     private void parsePesHeaderExtension() {
-        int val = readNextUnsignedByte();
-        if ((val & 0x80) >> 6 != 0x2) {
-            TivoDecoder.logger.severe(String.format("PES header extension starts with invalid bits: 0x%01x", val >> 6));
-            throw new RuntimeException("PES header extension start with invalid bits");
-        }
-//        boolean isScrambled = (val & 0x30) > 0;
-//        TivoDecoder.logger.info("PES isScrambled: " + isScrambled);
-
         // Skip over flags
-        readNextUnsignedByte();
-//        TivoDecoder.logger.info(String.format("PES Header Extension flags: 0x%02x", flags));
+        advanceBits(16);
 
         int dataLength = readNextUnsignedByte();
         skipBytes(dataLength);

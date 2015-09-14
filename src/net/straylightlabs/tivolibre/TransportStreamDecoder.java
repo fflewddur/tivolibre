@@ -51,7 +51,7 @@ class TransportStreamDecoder extends StreamDecoder {
             while (true) {
                 fillBuffer();
 
-//                if (bytesWritten > 19721212) {
+//                if (bytesWritten > 890117792) {
 //                    return false;
 //                }
 
@@ -61,15 +61,15 @@ class TransportStreamDecoder extends StreamDecoder {
                 } catch (TransportStreamException e) {
                     TivoDecoder.logger.warning(e.getLocalizedMessage());
                     packet = createPacketAtNextSyncByte(++packetCounter);
-                    TivoDecoder.logger.info("Re-synched!");
+                    TivoDecoder.logger.info("Re-synched at packet " + packetCounter);
                 }
 
                 if (TivoDecoder.logger.getLevel() == Level.INFO && packetCounter % 10000 == 0) {
-//                if (bytesWritten > 19720000) {
+//                if (bytesWritten > 890110000) {
                     TivoDecoder.logger.info(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
                                     packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
                     );
-                    TivoDecoder.logger.info(packet.toString());
+//                    TivoDecoder.logger.info(packet.toString());
 //                    TivoDecoder.logger.info("Packet data:\n" + packet.dump());
                 }
 
@@ -144,9 +144,8 @@ class TransportStreamDecoder extends StreamDecoder {
      */
     private TransportStreamPacket createPacketAtNextSyncByte(long nextPacketId) throws IOException {
         TransportStreamPacket packet = null;
-        int startPos = inputBuffer.position();
+        int startPos = inputBuffer.position() - TransportStream.FRAME_SIZE;
         int currentPos = startPos + 1; // Ensure we pass the start of the frame with the invalid sync byte or error flag set
-//        inputBuffer.rewind();
         while (packet == null) {
             if (currentPos == inputBuffer.capacity()) {
                 resizeAndFillInputBuffer(inputBuffer.capacity() + TransportStream.FRAME_SIZE);
