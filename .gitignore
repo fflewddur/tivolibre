@@ -15,5 +15,3 @@ hs_err_pid*
 # IDE files
 /.idea/workspace.xml
 /.idea/tasks.xml
-
-/batchTest.py
