@@ -29,16 +29,9 @@ class bcolors:
     FAIL = '\033[91m'
     ENDC = '\033[0m'
 
-class params:
-    mak = None
-    testDir = None
-    jarPath = './jar/tivo-libre.jar'
-    jarParams = ''
-
 def main():
     args = parseArgs()
     testFilesInDir(args)
-
 
 def parseArgs():
     parser = argparse.ArgumentParser()
