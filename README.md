@@ -33,3 +33,6 @@ The tivo-libre.jar file exposes the TivoDecoder class. TivoDecoder requires an I
 TivoLibre makes use of the Stream APIs introduced in Java 8 and will not run on older Java virtual machines.
 
 TivoLibre requires commons-codec-1.9.jar and commons-cli-1.3.1.jar (or higher) from Apache Commons. These libraries are included in tivo-libre.jar. If you want to use TivoLibre in a project that already includes these libraries, you can use the tivo-libre-no-deps.jar file. The commons-cli JAR is only needed by the DecoderApp command-line application.
+
+# Known Issues
+A list of known problems is available at https://github.com/fflewddur/tivolibre/issues.
