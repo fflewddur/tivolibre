@@ -31,6 +31,7 @@ class bcolors:
 
 def main():
     args = parseArgs()
+    printJarVersion(args)
     testFilesInDir(args)
 
 def parseArgs():
@@ -50,6 +51,10 @@ def parseArgs():
                         default=defaultJarPath, metavar="JAR_PATH")
     return parser.parse_args()
 
+def printJarVersion(args):
+    result = subprocess.run(['java', '-jar', args.jar, '-v'], stdout=subprocess.PIPE)
+    print("Running with {}".format(result.stdout.decode('utf-8')), end='')
+
 def testFilesInDir(args):
     filesWithDifferences = []
     perfectFiles = []
@@ -62,15 +67,17 @@ def testFilesInDir(args):
                 else:
                     perfectFiles.append(filePath)
 
-    print("\nPerfectly decoded files:" + bcolors.OKGREEN)
-    for filePath in perfectFiles:
-        print("\t{}".format(filePath))
-    print(bcolors.ENDC)
+    if perfectFiles:
+        print("\nPerfectly decoded files:" + bcolors.OKGREEN)
+        for filePath in perfectFiles:
+            print("\t{}".format(filePath))
+        print(bcolors.ENDC)
 
-    print("Shit to fix:" + bcolors.FAIL)
-    for filePath in filesWithDifferences:
-        print("\t{}".format(filePath))
-    print(bcolors.ENDC)
+    if filesWithDifferences:
+        print("Shit to fix:" + bcolors.FAIL)
+        for filePath in filesWithDifferences:
+            print("\t{}".format(filePath))
+        print(bcolors.ENDC)
 
 def decodeFile(inputPath, args):
     outputPath = inputPath.replace(args.sourceExtension, args.ourExtension)
