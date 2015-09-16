@@ -32,7 +32,7 @@ class TransportStream extends Stream {
     private final ByteBuffer pesBuffer;
     private final byte[] pesBufferArray;
     private int nextPacketPesOffset;
-    private boolean pauseDecrypting;
+    private boolean decryptingPaused;
 
     public static final int FRAME_SIZE = 188;
 
@@ -56,7 +56,7 @@ class TransportStream extends Stream {
      * Update the @turingKey and re-enabled decryption
      */
     public void setKey(byte[] val) {
-        if (!pauseDecrypting) {
+        if (!decryptingPaused) {
             turingKey = val;
         }
     }
@@ -65,11 +65,11 @@ class TransportStream extends Stream {
      * Tell the stream not to decrypt another packet until the @turingKey changes
      */
     public void pauseDecrypting() {
-        pauseDecrypting = true;
+        decryptingPaused = true;
     }
 
     public void resumeDecrypting() {
-        pauseDecrypting = false;
+        decryptingPaused = false;
     }
 
     public StreamType getType() {
@@ -96,7 +96,7 @@ class TransportStream extends Stream {
         }
 
         byte[] packetBytes;
-        if (!pauseDecrypting && packet.needsDecoding()) {
+        if (!decryptingPaused && packet.needsDecoding()) {
             packetBytes = decryptPacket(packet);
         } else {
             packetBytes = packet.getBytes();

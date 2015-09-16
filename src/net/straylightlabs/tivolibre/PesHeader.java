@@ -74,6 +74,9 @@ public class PesHeader {
             StartCode startCode = StartCode.valueOf(startCodeValue);
 //            TivoDecoder.logger.info("StartCode: " + startCode);
             switch (startCode) {
+                case ANCILLARY_DATA:
+                case SEQUENCE_END:
+                    break;
                 case EXTENSION:
                     parseExtensionHeader();
                     break;
@@ -85,9 +88,6 @@ public class PesHeader {
                     break;
                 case PICTURE_GROUP:
                     parsePictureGroup();
-                    break;
-                case SEQUENCE_END:
-                    parseSequenceEnd();
                     break;
                 case SEQUENCE_HEADER:
                     parseSequenceHeader();
@@ -314,10 +314,6 @@ public class PesHeader {
         }
     }
 
-    private void parseSequenceEnd() {
-
-    }
-
     private int readNextUnsignedByte() {
         try {
             int val = buffer.get(bitPos / BITS_PER_BYTE) & 0xff;
@@ -347,11 +343,11 @@ public class PesHeader {
     }
 
     enum StartCode {
+        ANCILLARY_DATA,
         PICTURE,
         PICTURE_GROUP,
         EXTENSION,
         PES_HEADER,
-        //        PES_HEADER_EXTENSION,
         SEQUENCE_END,
         SEQUENCE_HEADER,
         SLICE,
@@ -371,10 +367,12 @@ public class PesHeader {
                 return SEQUENCE_END;
             } else if (startCode == 0xB8) {
                 return PICTURE_GROUP;
-            } else if ((startCode >= 0xB9) && startCode <= 0xEF) {
+            } else if (startCode == 0xBD || (startCode >= 0xC0) && startCode <= 0xEF) {
                 return PES_HEADER;
             } else if ((startCode >= 0x01) && startCode <= 0xAF) {
                 return SLICE;
+            } else if (startCode == 0XF9) {
+                return ANCILLARY_DATA;
             } else {
                 return UNKNOWN;
             }
