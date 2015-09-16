@@ -100,7 +100,8 @@ public class PesHeader {
                     break;
                 default:
                     TivoDecoder.logger.severe(String.format("Unknown PES start code: 0x%02x", startCodeValue));
-                    throw new RuntimeException("Unknown start code");
+                    rewind(32);
+                    return;
             }
 
 //            TivoDecoder.logger.info(String.format("startCodePrefix=0x%06x startCode=%s bitPos=%,d bitLength=%,d bitLimit=%,d",
@@ -127,18 +128,26 @@ public class PesHeader {
         byteAlign();
 
         int startCodePrefix = NOT_A_START_CODE;
+        int startCodeLength = 0;
         try {
+
             startCodePrefix = nextBits(24);
 //            TivoDecoder.logger.info(String.format("startCodePrefix: 0x%06x bitPos: %,d", startCodePrefix, bitPos));
             while (startCodePrefix == 0) {
                 advanceBits(BITS_PER_BYTE);
+                startCodeLength += BITS_PER_BYTE;
                 startCodePrefix = nextBits(24);
             }
         } catch (BufferUnderflowException e) {
             // Ran out of buffer
 //            TivoDecoder.logger.info("Ran out of buffer");
         }
-        return startCodePrefix == START_CODE_PREFIX;
+        if (startCodePrefix == START_CODE_PREFIX) {
+            return true;
+        } else {
+            rewind(startCodeLength);
+            return false;
+        }
     }
 
     private void byteAlign() {
@@ -362,7 +371,7 @@ public class PesHeader {
                 return SEQUENCE_END;
             } else if (startCode == 0xB8) {
                 return PICTURE_GROUP;
-            } else if ((startCode >= 0xB9) && startCode <= 0xFF) {
+            } else if ((startCode >= 0xB9) && startCode <= 0xEF) {
                 return PES_HEADER;
             } else if ((startCode >= 0x01) && startCode <= 0xAF) {
                 return SLICE;
