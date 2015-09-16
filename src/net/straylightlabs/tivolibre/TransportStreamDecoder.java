@@ -119,7 +119,7 @@ class TransportStreamDecoder extends StreamDecoder {
                         return false;
                 }
 
-                decryptAndwritePacket(packet);
+                decryptAndWritePacket(packet);
 //                if (TivoDecoder.logger.getLevel() == Level.INFO && packetCounter % 100000 == 0) {
 //                if (bytesWritten > 0x930707ecL) {
 //                    TivoDecoder.logger.info(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
@@ -326,24 +326,8 @@ class TransportStreamDecoder extends StreamDecoder {
             pmtField = packet.readUnsignedShortFromData();
             sectionLength -= 2;
             int esInfoLength = pmtField & 0x0fff;
-            while (esInfoLength > 0) {
-                int tag = packet.readUnsignedByteFromData();
-                esInfoLength--;
-                sectionLength--;
-                int length = packet.readUnsignedByteFromData();
-                esInfoLength--;
-                sectionLength--;
-                if (TivoDecoder.logger.getLevel() == Level.FINE) {
-                    StringBuilder sb = new StringBuilder();
-                    for (int i = 0; i < length; i++) {
-                        int val = packet.readUnsignedByteFromData();
-                        sb.append(String.format("%02x", val & 0xff));
-                        esInfoLength--;
-                        sectionLength--;
-                    }
-                    TivoDecoder.logger.fine(String.format("ES tag: 0x%02x length: 0x%02x content: 0x%s", tag, length, sb.toString()));
-                }
-            }
+            packet.advanceDataOffset(esInfoLength);
+            sectionLength -= esInfoLength;
 
             // Create a stream for this PID unless one already exists
             if (!streams.containsKey(streamPid)) {
@@ -369,9 +353,7 @@ class TransportStreamDecoder extends StreamDecoder {
             return false;
         }
 
-        int unknown1 = packet.readUnsignedShortFromData();
-        int unknown2 = packet.readUnsignedByteFromData();
-        TivoDecoder.logger.fine(String.format("Unknown1 = 0x%04x Unknown2 = 0x%02x", unknown1, unknown2));
+        packet.advanceDataOffset(3);
 
         int streamLength = packet.readUnsignedByteFromData();
         while (streamLength > 0) {
@@ -396,7 +378,7 @@ class TransportStreamDecoder extends StreamDecoder {
         return true;
     }
 
-    private void decryptAndwritePacket(TransportStreamPacket packet) {
+    private void decryptAndWritePacket(TransportStreamPacket packet) {
         TransportStream stream = streams.get(packet.getPID());
         if (stream == null) {
             TivoDecoder.logger.warning(String.format("No TransportStream exists with PID 0x%04x, creating one",
