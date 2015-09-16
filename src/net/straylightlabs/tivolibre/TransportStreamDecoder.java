@@ -53,7 +53,7 @@ class TransportStreamDecoder extends StreamDecoder {
             while (true) {
                 fillBuffer();
 
-//                if (bytesWritten > 0x930707ecL) {
+//                if (bytesWritten > 0x2ee000bfL) {
 //                    return false;
 //                }
 
@@ -62,18 +62,25 @@ class TransportStreamDecoder extends StreamDecoder {
                     packet = TransportStreamPacket.createFrom(inputBuffer, ++packetCounter);
                 } catch (TransportStreamException e) {
                     TivoDecoder.logger.warning(e.getLocalizedMessage());
-                    packet = createPacketAtNextSyncByte(++packetCounter);
-                    TivoDecoder.logger.info("Re-synched at packet " + packetCounter);
+                    packet = null;
+                    while (packet == null) {
+                        try {
+                            packet = createPacketAtNextSyncByte(++packetCounter);
+                        } catch (TransportStreamException e2) {
+                            TivoDecoder.logger.warning("Problem with packet, moving on to the next");
+                        }
+                    }
+                    TivoDecoder.logger.info(String.format("Re-synched at packet %d (byte 0x%x)", packetCounter, bytesWritten));
                 }
 
-//                if (TivoDecoder.logger.getLevel() == Level.INFO && packetCounter % 100000 == 0) {
-//                if (bytesWritten > 2197835000L) {
-//                    TivoDecoder.logger.info(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
-//                                    packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
-//                    );
+                if (TivoDecoder.logger.getLevel() == Level.INFO && packetCounter % 100000 == 0) {
+//                if (bytesWritten > 0x2ed00000L) {
+                    TivoDecoder.logger.info(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
+                                    packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
+                    );
 //                    TivoDecoder.logger.info(packet.toString());
 //                    TivoDecoder.logger.info("Packet data:\n" + packet.dump());
-//                }
+                }
 
                 switch (packet.getPacketType()) {
                     case PROGRAM_ASSOCIATION_TABLE:
