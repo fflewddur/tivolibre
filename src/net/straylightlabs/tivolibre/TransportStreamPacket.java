@@ -44,16 +44,13 @@ class TransportStreamPacket {
     }
 
     public boolean readFrom(ByteBuffer source) throws IOException {
-        // Can we read the desired number of bytes?
-        if (source.position() + TransportStream.FRAME_SIZE > source.limit()) {
-            throw new EOFException();
-        }
-
         // Make a local copy of the buffer
-        buffer = ByteBuffer.allocate(TransportStream.FRAME_SIZE);
-        System.arraycopy(source.array(), source.position(), buffer.array(), 0, TransportStream.FRAME_SIZE);
+        int bufferSize = Math.min(source.limit() - source.position(), TransportStream.FRAME_SIZE);
+        buffer = ByteBuffer.allocate(bufferSize);
+        System.arraycopy(source.array(), source.position(), buffer.array(), 0, bufferSize);
+
         // Advance the position of the source buffer
-        source.position(source.position() + TransportStream.FRAME_SIZE);
+        source.position(source.position() + bufferSize);
 
         header = readHeader(buffer);
         dataOffset = 0;
@@ -77,10 +74,6 @@ class TransportStreamPacket {
             if (adaptationFieldLength > 0) {
                 adaptationFieldBits = source.get() & 0xff;
                 adaptationField = new AdaptationField(adaptationFieldBits);
-                if (adaptationField.isPrivate()) {
-                    TivoDecoder.logger.severe("Found private adaptation field data; we don't know how to handle this");
-                    throw new TransportStreamException("Stream contains private adaptation field data");
-                }
                 headerLength += (adaptationFieldLength + 1);
             } else {
                 headerLength++;
@@ -103,23 +96,27 @@ class TransportStreamPacket {
         return true;
     }
 
-    public byte[] getBytes() {
+    /**
+     * Don't decode packets unless there is payload data to decrypt, even if the isScrambled bit is set.
+     */
+    public boolean needsDecoding() {
+        return (isScrambled() && header.getLength() + pesHeaderOffset < buffer.capacity());
+    }
 
-        if (isScrambled()) {
-            throw new IllegalStateException("Cannot get bytes from scrambled packet");
-        } else if (!buffer.hasArray()) {
+    public byte[] getBytes() {
+        if (!buffer.hasArray()) {
             throw new IllegalStateException("Cannot get bytes from empty packet");
         }
 
-        byte[] bytes = new byte[TransportStream.FRAME_SIZE];
-        System.arraycopy(buffer.array(), 0, bytes, 0, TransportStream.FRAME_SIZE);
+        byte[] bytes = new byte[buffer.capacity()];
+        System.arraycopy(buffer.array(), 0, bytes, 0, buffer.capacity());
         return bytes;
     }
 
     public byte[] getScrambledBytes(byte[] decrypted) {
-        byte[] bytes = new byte[TransportStream.FRAME_SIZE];
+        byte[] bytes = new byte[buffer.capacity()];
         if (buffer.hasArray()) {
-            System.arraycopy(buffer.array(), 0, bytes, 0, TransportStream.FRAME_SIZE - decrypted.length);
+            System.arraycopy(buffer.array(), 0, bytes, 0, buffer.capacity() - decrypted.length);
             System.arraycopy(decrypted, 0, bytes, header.getLength() + getPesHeaderOffset(), decrypted.length);
         } else {
             throw new IllegalStateException("Cannot get bytes from empty packet");
@@ -136,8 +133,8 @@ class TransportStreamPacket {
         bytes[3] &= ~(0xC0);
     }
 
-    public int getPayloadOffset() {
-        return header.getLength();
+    public int getPayloadLength() {
+        return buffer.capacity() - header.getLength();
     }
 
     public void setPesHeaderOffset(int val) {
@@ -177,7 +174,7 @@ class TransportStreamPacket {
     }
 
     public byte[] getDataAt(int offset) {
-        byte[] data = new byte[TransportStream.FRAME_SIZE - header.getLength() - offset];
+        byte[] data = new byte[buffer.capacity() - header.getLength() - offset];
         System.arraycopy(buffer.array(), header.getLength() + offset, data, 0, data.length);
         return data;
     }
@@ -238,7 +235,7 @@ class TransportStreamPacket {
         if (header.hasAdaptationField) {
             s += String.format("%nAdaptation field = %s", adaptationField);
         }
-        s += String.format("%nBody: isPmt=" + isPmt);
+        s += String.format("%nBody: isPmt=%s, pesHeaderOffset=%d", isPmt, pesHeaderOffset);
         return s;
     }
 
@@ -291,15 +288,15 @@ class TransportStreamPacket {
         }
 
         private void initFromBits(int bits) {
-            sync = (bits & 0xFF000000) >> 24;
-            hasTransportError = ((bits & 0x00800000) >> 23) == 1;
-            isPayloadStart = ((bits & 0x00400000) >> 22) == 1;
-            isPriority = ((bits & 0x00200000) >> 21) == 1;
-            pid = (bits & 0x001FFF00) >> 8;
-            isScrambled = (bits & 0x000000C0) != 0;
-            hasAdaptationField = (bits & 0x00000020) == 0x20;
-            hasPayloadData = (bits & 0x00000010) == 0x10;
-            counter = (bits & 0x0000000F);
+            sync = (bits & 0xFF000000) >>> 24;
+            hasTransportError = ((bits & 0x800000) >> 23) == 1;
+            isPayloadStart = ((bits & 0x400000) >> 22) == 1;
+            isPriority = ((bits & 0x200000) >> 21) == 1;
+            pid = (bits & 0x1FFF00) >> 8;
+            isScrambled = (bits & 0xC0) != 0;
+            hasAdaptationField = (bits & 0x20) == 0x20;
+            hasPayloadData = (bits & 0x10) == 0x10;
+            counter = (bits & 0xF);
         }
 
         public void setLength(int val) {
@@ -349,9 +346,9 @@ class TransportStreamPacket {
 //            return hasPayloadData;
 //        }
 
-//        public int getCounter() {
-//            return counter;
-//        }
+        public int getCounter() {
+            return counter;
+        }
 
         @Override
         public String toString() {
@@ -397,6 +394,10 @@ class TransportStreamPacket {
 
         public boolean isPrivate() {
             return isPrivate;
+        }
+
+        public boolean isDiscontinuity() {
+            return isDiscontinuity;
         }
 
         @Override

@@ -52,7 +52,7 @@ abstract class StreamDecoder {
 
     private void initPatStream() {
 //        System.out.format("Creating new stream for PID (0x%04x)%n", 0);
-        TransportStream stream = new TransportStream(outputStream, turingDecoder);
+        TransportStream stream = new TransportStream(turingDecoder);
         streams.put(0, stream);
     }
 
@@ -114,7 +114,7 @@ abstract class StreamDecoder {
             // Create a stream for this PID unless one already exists
             if (!streams.containsKey(patData.getProgramMapPid())) {
                 TivoDecoder.logger.info(String.format("Creating a new stream for PMT PID 0x%04x", patData.getProgramMapPid()));
-                TransportStream stream = new TransportStream(outputStream, turingDecoder);
+                TransportStream stream = new TransportStream(turingDecoder);
                 streams.put(patData.getProgramMapPid(), stream);
             }
         }

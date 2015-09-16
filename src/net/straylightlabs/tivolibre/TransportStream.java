@@ -22,37 +22,54 @@
 
 package net.straylightlabs.tivolibre;
 
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
 class TransportStream extends Stream {
-    private final OutputStream outputStream;
     private final TuringDecoder turingDecoder;
-    private StreamType type;
+    private final StreamType type;
     private final ByteBuffer pesBuffer;
     private final byte[] pesBufferArray;
     private int nextPacketPesOffset;
+    private boolean pauseDecrypting;
 
     public static final int FRAME_SIZE = 188;
 
-    public TransportStream(OutputStream outputStream, TuringDecoder decoder) {
+    public TransportStream(TuringDecoder decoder) {
         super();
-        this.outputStream = outputStream;
         this.turingDecoder = decoder;
         this.type = StreamType.NONE;
         pesBufferArray = new byte[FRAME_SIZE];
         pesBuffer = ByteBuffer.wrap(pesBufferArray);
     }
 
-    public TransportStream(OutputStream outputStream, TuringDecoder decoder, StreamType type) {
-        this(outputStream, decoder);
+    public TransportStream(TuringDecoder decoder, StreamType type) {
+        super();
+        this.turingDecoder = decoder;
         this.type = type;
+        pesBufferArray = new byte[FRAME_SIZE];
+        pesBuffer = ByteBuffer.wrap(pesBufferArray);
     }
 
+    /**
+     * Update the @turingKey and re-enabled decryption
+     */
     public void setKey(byte[] val) {
-        turingKey = val;
+        if (!pauseDecrypting) {
+            turingKey = val;
+        }
+    }
+
+    /**
+     * Tell the stream not to decrypt another packet until the @turingKey changes
+     */
+    public void pauseDecrypting() {
+        pauseDecrypting = true;
+    }
+
+    public void resumeDecrypting() {
+        pauseDecrypting = false;
     }
 
     public StreamType getType() {
@@ -60,9 +77,11 @@ class TransportStream extends Stream {
     }
 
     /**
-     * Decrypt @packet (if necessary) and write it to our output stream.
+     * Process @packet's headers and decrypt it if necessary.
+     *
+     * @return The byte array to write to the output stream
      */
-    public int writePacket(TransportStreamPacket packet) {
+    public byte[] processPacket(TransportStreamPacket packet) {
         try {
             copyPayloadToPesBuffer(packet);
             calculatePesHeaderOffset(packet);
@@ -76,35 +95,53 @@ class TransportStream extends Stream {
             throw e;
         }
 
-        return decryptAndWritePacket(packet);
+        byte[] packetBytes;
+        if (!pauseDecrypting && packet.needsDecoding()) {
+            packetBytes = decryptPacket(packet);
+        } else {
+            packetBytes = packet.getBytes();
+        }
+
+        return packetBytes;
     }
 
     /**
-     * Put @packet's data in a ByteBuffer for easier consumption
+     * Put @packet's data in a ByteBuffer for easier consumption. If we already know the PES header is too long
+     * to end in this packet, don't bother copying @packet's data.
      */
     private void copyPayloadToPesBuffer(TransportStreamPacket packet) {
         byte[] data = packet.getData();
-        System.arraycopy(data, 0, pesBufferArray, 0, data.length);
-        pesBuffer.position(0);
-        pesBuffer.limit(data.length);
-
+        if (nextPacketPesOffset < data.length) {
+            // The PES header might end in this packet
+            System.arraycopy(data, nextPacketPesOffset, pesBufferArray, 0, data.length - nextPacketPesOffset);
+            pesBuffer.position(0);
+            pesBuffer.limit(data.length);
+        }
     }
 
     /**
-     * Figure out the PES header offset for @packet. We don't decrypt PES headers, so we need to know exactly
+     * Figure out the PES header offset for @packet. We don't decryptBuffer PES headers, so we need to know exactly
      * where in the buffer to start the decrypt process. If the header extends past the boundary of @packet,
      * store extra length in @nextPacketOffset so the next packet can be decrypted at the right offset.
+     * If @nextPacketOffset is larger than this packet's payload, don't try to parse its PES headers.
      */
     private void calculatePesHeaderOffset(TransportStreamPacket packet) {
-        int packetPesOffset = nextPacketPesOffset;
-        int sumOfPesHeaderLengths = getPesHeaderLength() + packetPesOffset;
-        if (sumOfPesHeaderLengths <= pesBuffer.limit()) {
-            // PES headers end in this packet
-            packet.setPesHeaderOffset(sumOfPesHeaderLengths);
-            nextPacketPesOffset = 0;
+        int payloadLength = packet.getPayloadLength();
+        if (nextPacketPesOffset < payloadLength) {
+            int packetPesOffset = nextPacketPesOffset;
+            int sumOfPesHeaderLengths = getPesHeaderLength() + packetPesOffset;
+            if (sumOfPesHeaderLengths <= pesBuffer.limit()) {
+                // PES headers end in this packet
+                packet.setPesHeaderOffset(sumOfPesHeaderLengths);
+                nextPacketPesOffset = 0;
+            } else {
+                nextPacketPesOffset = sumOfPesHeaderLengths - pesBuffer.limit();
+                packet.setPesHeaderOffset(pesBuffer.limit());
+            }
         } else {
-            nextPacketPesOffset = sumOfPesHeaderLengths - pesBuffer.limit();
-            packet.setPesHeaderOffset(pesBuffer.limit());
+            // We already know the PES header extends into the next packet, so skip over this one
+            nextPacketPesOffset -= payloadLength;
+            packet.setPesHeaderOffset(payloadLength);
         }
     }
 
@@ -113,7 +150,7 @@ class TransportStream extends Stream {
         return pesHeader.size();
     }
 
-    public boolean decrypt(byte[] buffer) {
+    public boolean decryptBuffer(byte[] buffer) {
         if (!doHeader()) {
             TivoDecoder.logger.severe("Problem parsing Turing header");
             return false;
@@ -123,38 +160,17 @@ class TransportStream extends Stream {
         return true;
     }
 
-    /**
-     * If @packet is encrypted, decrypt it and write it out.
-     * Otherwise, just write it out.
-     */
-    private int decryptAndWritePacket(TransportStreamPacket packet) {
-        int bytesWritten = 0;
-        try {
-            byte[] packetBytes;
-            if (packet.isScrambled()) {
-                packet.clearScrambled();
-                byte[] encryptedData = packet.getData();
-                int encryptedLength = encryptedData.length - packet.getPesHeaderOffset();
-                byte[] data = new byte[encryptedLength];
-//                if (packet.getPesHeaderOffset() > 0)
-//                    TivoDecoder.logger.info(String.format("Packet: %d PES Header offset: %d", packet.getPacketId(), packet.getPesHeaderOffset()));
-                System.arraycopy(encryptedData, packet.getPesHeaderOffset(), data, 0, encryptedLength);
-                if (!decrypt(data)) {
-                    TivoDecoder.logger.severe("Decrypting packet failed");
-                    throw new RuntimeException("Decrypting packet failed");
-                }
-                packetBytes = packet.getScrambledBytes(data);
-            } else {
-                packetBytes = packet.getBytes();
-            }
-            outputStream.write(packetBytes);
-            bytesWritten += packetBytes.length;
-        } catch (Exception e) {
-            TivoDecoder.logger.severe("Error writing file: " + e.getLocalizedMessage());
-            throw new RuntimeException();
+    private byte[] decryptPacket(TransportStreamPacket packet) {
+        packet.clearScrambled();
+        byte[] encryptedData = packet.getData();
+        int encryptedLength = encryptedData.length - packet.getPesHeaderOffset();
+        byte[] data = new byte[encryptedLength];
+        System.arraycopy(encryptedData, packet.getPesHeaderOffset(), data, 0, encryptedLength);
+        if (!decryptBuffer(data)) {
+            TivoDecoder.logger.severe("Decrypting packet failed");
+            throw new RuntimeException("Decrypting packet failed");
         }
-
-        return bytesWritten;
+        return packet.getScrambledBytes(data);
     }
 
     public enum StreamType {
@@ -210,7 +226,8 @@ class TransportStream extends Stream {
         }
 
         public static StreamType valueOf(int val) {
-            return typeMap.getOrDefault(val, PRIVATE_DATA);
+            return typeMap.getOrDefault(val, NONE);
+//            }
         }
     }
 }
