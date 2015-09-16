@@ -119,7 +119,9 @@ public class DecoderApp {
         try (BufferedInputStream inputStream = new BufferedInputStream(input);
              BufferedOutputStream outputStream = new BufferedOutputStream(output)) {
             TivoDecoder decoder = new TivoDecoder(inputStream, outputStream, mak);
-            System.out.println(TivoDecoder.QUALCOMM_MSG);
+            if (output != System.out) {
+                System.out.println(TivoDecoder.QUALCOMM_MSG);
+            }
             decoder.decode();
         } catch (FileNotFoundException e) {
             TivoDecoder.logger.severe(String.format("Error: %s", e.getLocalizedMessage()));
