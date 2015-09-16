@@ -22,7 +22,6 @@
 
 package net.straylightlabs.tivolibre;
 
-import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -80,6 +79,10 @@ class TransportStreamPacket {
             }
         }
 
+        if (headerLength > TransportStream.FRAME_SIZE) {
+            // TODO fix adaptation field length when not in compatibility mode
+            headerLength = TransportStream.FRAME_SIZE;
+        }
         header.setLength(headerLength);
 
         return header;

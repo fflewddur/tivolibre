@@ -33,6 +33,7 @@ public class PesHeader {
     private ByteBuffer buffer;
     private int bitPos;
     private int bitLength;
+    private boolean isScrambled;
 
     private static int START_CODE_PREFIX = 0x000001;
     private static int NOT_A_START_CODE = 0xffffffff;
@@ -55,6 +56,11 @@ public class PesHeader {
     }
 
     public int size() {
+        if (isScrambled) {
+            // Scrambled packets need to be decoded
+            return 0;
+        }
+
         int bytes = bitLength / BITS_PER_BYTE;
         if (bitLength % BITS_PER_BYTE != 0) {
             // If the header ends mid-byte, it will be padded to keep the following data byte-aligned
@@ -228,8 +234,10 @@ public class PesHeader {
     }
 
     private void parsePesHeaderExtension() {
-        // Skip over flags
-        advanceBits(16);
+        // Skip over most flags
+        advanceBits(2);
+        isScrambled = getAndAdvanceBits(2) > 0;
+        advanceBits(12);
 
         int dataLength = readNextUnsignedByte();
         skipBytes(dataLength);

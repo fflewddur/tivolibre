@@ -53,7 +53,7 @@ class TransportStreamDecoder extends StreamDecoder {
             while (true) {
                 fillBuffer();
 
-//                if (bytesWritten > 0x1cfd74a8cL) {
+//                if (bytesWritten > 0x930707ecL) {
 //                    return false;
 //                }
 
@@ -67,7 +67,7 @@ class TransportStreamDecoder extends StreamDecoder {
                 }
 
 //                if (TivoDecoder.logger.getLevel() == Level.INFO && packetCounter % 100000 == 0) {
-//                if (bytesWritten > 739_721_520) {
+//                if (bytesWritten > 2197835000L) {
 //                    TivoDecoder.logger.info(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
 //                                    packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
 //                    );
@@ -113,14 +113,14 @@ class TransportStreamDecoder extends StreamDecoder {
                 }
 
                 decryptAndwritePacket(packet);
-                if (TivoDecoder.logger.getLevel() == Level.INFO && packetCounter % 100000 == 0) {
-//                if (bytesWritten > 0x1cfd70000L) {
-                    TivoDecoder.logger.info(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
-                                    packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
-                    );
+//                if (TivoDecoder.logger.getLevel() == Level.INFO && packetCounter % 100000 == 0) {
+//                if (bytesWritten > 0x930707ecL) {
+//                    TivoDecoder.logger.info(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
+//                                    packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
+//                    );
 //                    TivoDecoder.logger.info(packet.toString());
 //                    TivoDecoder.logger.info("Packet data:\n" + packet.dump());
-                }
+//                }
             }
         } catch (EOFException e) {
             TivoDecoder.logger.info("End of file reached");
