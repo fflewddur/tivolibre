@@ -46,6 +46,8 @@ def parseArgs():
                         default='.mpg', metavar='FILE_EXTENSION', dest='ourExtension')
     parser.add_argument('-s', help="Extension for source files (default is .TiVo)",
                         default='.TiVo', metavar='FILE_EXTENSION', dest='sourceExtension')
+    parser.add_argument('--skip', help="Skip the first N TiVo files", metavar='N', type=int,
+                        default=0)
     parser.add_argument('-j', '--jar',
                         help="Path to the TivoLibre JAR (default is " + defaultJarPath +")",
                         default=defaultJarPath, metavar="JAR_PATH")
@@ -58,14 +60,18 @@ def printJarVersion(args):
 def testFilesInDir(args):
     filesWithDifferences = []
     perfectFiles = []
+    numSkipped = 0
     for path, subdirs, files in os.walk(args.testDir):
         for name in files:
-            if not name.startswith('.') and name.endswith(args.sourceExtension):
-                filePath = os.path.join(path, name)
-                if not decodeFile(filePath, args):
-                    filesWithDifferences.append(filePath)
+            if isTivoFile(name, args):
+                if numSkipped >= args.skip:
+                    filePath = os.path.join(path, name)
+                    if not decodeFile(filePath, args):
+                        filesWithDifferences.append(filePath)
+                    else:
+                        perfectFiles.append(filePath)
                 else:
-                    perfectFiles.append(filePath)
+                    numSkipped += 1
 
     if perfectFiles:
         print("\nPerfectly decoded files:" + bcolors.OKGREEN)
@@ -78,6 +84,9 @@ def testFilesInDir(args):
         for filePath in filesWithDifferences:
             print("\t{}".format(filePath))
         print(bcolors.ENDC)
+
+def isTivoFile(name, args):
+    return not name.startswith('.') and name.endswith(args.sourceExtension)
 
 def decodeFile(inputPath, args):
     outputPath = inputPath.replace(args.sourceExtension, args.ourExtension)
