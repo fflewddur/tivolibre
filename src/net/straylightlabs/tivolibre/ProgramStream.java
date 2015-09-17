@@ -55,7 +55,7 @@ public class ProgramStream extends Stream {
                 headerBufferPosition += 5;
                 if (((header[2] & 0xff) >> 6) != 0x2) {
                     TivoDecoder.logger.warning(
-                            String.format("PES (0x%02X) header mark != 0x2: 0x%x (is this an MPEG2-PS file?",
+                            String.format("PES (0x%02X) header mark != 0x2: 0x%x (is this an MPEG2-PS file?)",
                                     code, (header[2] & 0xff) >> 6)
                     );
                 }
@@ -67,23 +67,22 @@ public class ProgramStream extends Stream {
                     }
                 }
             } else {
-                inputStream.read(header, 0, 2);
+                inputStream.read(header, headerBufferPosition, 2);
                 headerBufferPosition += 2;
             }
             length = header[1] & 0xff;
-            length |= (header[0] & 0xff) << 8;
+            length |= ((header[0] & 0xff) << 8);
             byte[] packetBuffer = new byte[65536 + 8 + 2];
             System.arraycopy(header, 0, packetBuffer, 0, headerBufferPosition);
-            inputStream.read(packetBuffer, headerBufferPosition, length + 2 - headerBufferPosition);
-
+            int bytesRead = inputStream.read(packetBuffer, headerBufferPosition, length + 2 - headerBufferPosition) + headerBufferPosition;
             if (scramble == 3) {
                 int packetOffset;
                 int packetSize;
                 if (headerLength > 0) {
                     packetOffset = headerBufferPosition;
-                    packetSize = length + 2 - headerBufferPosition;
+                    packetSize = length - headerBufferPosition + 2;
                 } else {
-                    packetOffset = 2;
+                    packetOffset = headerBufferPosition;
                     packetSize = length;
                 }
                 turingDecoder.decryptBytes(activeStream, packetBuffer, packetOffset, packetSize);
@@ -94,7 +93,7 @@ public class ProgramStream extends Stream {
             }
 
             outputStream.write(code);
-            outputStream.write(packetBuffer, 0, length + 2);
+            outputStream.write(packetBuffer, 0, Math.min(length + 2, bytesRead));
 
             return 1;
         }
