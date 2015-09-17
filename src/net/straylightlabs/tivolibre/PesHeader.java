@@ -84,7 +84,10 @@ public class PesHeader {
                 case SEQUENCE_END:
                     break;
                 case EXTENSION:
-                    parseExtensionHeader();
+                    if (!parseExtensionHeader()) {
+                        rewind(BITS_PER_INT);
+                        return;
+                    }
                     break;
                 case PES_HEADER:
                     parsePesHeader(startCodeValue);
@@ -99,14 +102,14 @@ public class PesHeader {
                     parseSequenceHeader();
                     break;
                 case SLICE:
-                    rewind(32);
+                    rewind(BITS_PER_INT);
                     return;
                 case USER_DATA:
                     parseUserData();
                     break;
                 default:
                     TivoDecoder.logger.severe(String.format("Unknown PES start code: 0x%02x", startCodeValue));
-                    rewind(32);
+                    rewind(BITS_PER_INT);
                     return;
             }
 
@@ -276,7 +279,7 @@ public class PesHeader {
         }
     }
 
-    private void parseExtensionHeader() {
+    private boolean parseExtensionHeader() {
         int extensionType = getAndAdvanceBits(4);
         switch (ExtensionType.valueOf(extensionType)) {
             case SEQUENCE:
@@ -289,9 +292,10 @@ public class PesHeader {
                 parsePictureCodingExtension();
                 break;
             default:
-                TivoDecoder.logger.severe("Unknown PES extension header type: " + extensionType);
-                throw new RuntimeException("Unknown PES extension header type");
+                TivoDecoder.logger.warning("Unknown PES extension header type: " + extensionType);
+                return false;
         }
+        return true;
     }
 
     private void parseSequenceExtension() {
