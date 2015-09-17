@@ -102,6 +102,9 @@ class BatchTester:
     def decodeFile(self, inputPath):
         outputPath = inputPath.replace(self.args.sourceExtension, self.args.ourExtension)
         print(bcolors.OKBLUE + "Testing {}{}".format(inputPath, bcolors.ENDC))
+        if (os.path.isfile(outputPath)):
+            print("Deleting existing output file...")
+            os.remove(outputPath)
         print("Decoding to {}...".format(outputPath))
         subprocess.run(['java', '-jar', self.jarPath, '-m', self.args.mak, '-i', inputPath,
                         '-o', outputPath])
