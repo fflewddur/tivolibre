@@ -36,6 +36,7 @@ class TransportStreamDecoder extends StreamDecoder {
 
     private static final byte SYNC_BYTE_VALUE = 0x47;
     private static final int PACKETS_UNTIL_RESYNC = 4;
+    private static final int DECRYPTION_PAUSED_INTERVAL = 0x100000;
 
     public TransportStreamDecoder(TuringDecoder decoder, int mpegOffset, CountingDataInputStream inputStream,
                                   OutputStream outputStream) {
@@ -60,7 +61,7 @@ class TransportStreamDecoder extends StreamDecoder {
                 try {
                     packet = TransportStreamPacket.createFrom(inputBuffer, ++packetCounter);
                 } catch (TransportStreamException e) {
-                    TivoDecoder.logger.warn("", e);
+                    TivoDecoder.logger.warn("{}", e.getLocalizedMessage());
                     packet = null;
                     while (packet == null) {
                         try {
@@ -72,15 +73,6 @@ class TransportStreamDecoder extends StreamDecoder {
                     if (TivoDecoder.logger.isInfoEnabled()) {
                         TivoDecoder.logger.info(String.format("Re-synched at packet %d (byte 0x%x)", packetCounter, bytesWritten));
                     }
-                }
-
-                if (TivoDecoder.logger.isDebugEnabled() && packetCounter % 100000 == 0) {
-//                if (bytesWritten > 0x2ed00000L) {
-                    TivoDecoder.logger.debug(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
-                                    packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
-                    );
-//                    TivoDecoder.logger.info(packet.toString());
-//                    TivoDecoder.logger.info("Packet data:\n" + packet.dump());
                 }
 
                 switch (packet.getPacketType()) {
@@ -113,6 +105,7 @@ class TransportStreamDecoder extends StreamDecoder {
                         break;
                     case NULL:
                         // These packets are for maintaining a constant bit-rate; just copy them through to the output.
+                        // TODO drop these packets unless in compatibility mode
                         TivoDecoder.logger.debug("NULL packet");
                         break;
                     default:
@@ -121,14 +114,14 @@ class TransportStreamDecoder extends StreamDecoder {
                 }
 
                 decryptAndWritePacket(packet);
-//                if (TivoDecoder.logger.getLevel() == Level.INFO && packetCounter % 100000 == 0) {
+                if (TivoDecoder.logger.isDebugEnabled() && packetCounter % 100000 == 0) {
 //                if (bytesWritten > 0x930707ecL) {
-//                    TivoDecoder.logger.info(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
-//                                    packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
-//                    );
-//                    TivoDecoder.logger.info(packet.toString());
+                    TivoDecoder.logger.debug(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
+                                    packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
+                    );
+                    TivoDecoder.logger.debug("{}", packet);
 //                    TivoDecoder.logger.info("Packet data:\n" + packet.dump());
-//                }
+                }
             }
         } catch (EOFException e) {
             TivoDecoder.logger.info("End of file reached");
@@ -191,23 +184,17 @@ class TransportStreamDecoder extends StreamDecoder {
                     // Looks like we re-synchronized!
                     int unsynchronizedLength = currentPos - startPos;
                     if (unsynchronizedLength > 0) {
-                        long delta = 0x100000 - (bytesWritten & 0xfffff);
+                        long deltaToNextInterval = DECRYPTION_PAUSED_INTERVAL - (bytesWritten & 0xfffff);
                         resumeDecryptionAtByte = bytesWritten + unsynchronizedLength;
                         TivoDecoder.logger.debug(String.format("Starting value for resumeDecryptionAtByte: 0x%x", resumeDecryptionAtByte));
                         // We'll resume decryption at the next position that's evenly divisible by the TS frame size
-                        if (resumeDecryptionAtByte % TransportStream.FRAME_SIZE != 0) {
-                            resumeDecryptionAtByte += delta;
-                            while (resumeDecryptionAtByte % TransportStream.FRAME_SIZE != 0) {
-                                resumeDecryptionAtByte += 0x100000L;
-                            }
+                        for (;
+                             resumeDecryptionAtByte % DECRYPTION_PAUSED_INTERVAL != 0;
+                             resumeDecryptionAtByte += TransportStream.FRAME_SIZE) {
                         }
-//                        for (;
-//                             resumeDecryptionAtByte % 0x100000L != 0;
-//                             resumeDecryptionAtByte += 188L) {
-//                        }
                         TivoDecoder.logger.debug(String.format("Resume decryption at: 0x%x", resumeDecryptionAtByte));
                         boolean maskThirdByte = nextResumeDecryptionByteOffset == 0;
-                        nextResumeDecryptionByteOffset = bytesWritten + delta;
+                        nextResumeDecryptionByteOffset = bytesWritten + deltaToNextInterval;
                         outputUnsynchronizedBytes(startPos, unsynchronizedLength, maskThirdByte);
                         pauseDecryption();
                     }
@@ -252,6 +239,7 @@ class TransportStreamDecoder extends StreamDecoder {
      */
     private void outputUnsynchronizedBytes(int offset, int length, boolean maskThirdByte) throws IOException {
         // The TiVo DirectShow filter includes these bytes in the output, so we will, too.
+        // TODO drop these bytes unless in compatibility mode
         TivoDecoder.logger.debug(String.format("Writing unsynchronized bytes from %d to %d (0x%x to 0x%x)%noffset = %d, length = %d",
                 bytesWritten, bytesWritten + length, bytesWritten, bytesWritten + length, offset, length));
         byte[] bytes = inputBuffer.array();
@@ -393,6 +381,7 @@ class TransportStreamDecoder extends StreamDecoder {
     private void decryptAndWritePacket(TransportStreamPacket packet) {
         TransportStream stream = streams.get(packet.getPID());
         if (stream == null) {
+            // TODO drop these packets unless in compatibility mode
             TivoDecoder.logger.warn(String.format("No TransportStream exists with PID 0x%04x, creating one",
                             packet.getPID())
             );
@@ -410,6 +399,7 @@ class TransportStreamDecoder extends StreamDecoder {
         }
 
         try {
+            // TODO Drop any packets while decryption is paused, unless in compatibility mode
             outputStream.write(packetBytes);
             bytesWritten += packetBytes.length;
         } catch (Exception e) {
