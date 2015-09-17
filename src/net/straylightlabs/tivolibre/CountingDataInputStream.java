@@ -57,25 +57,30 @@ class CountingDataInputStream implements AutoCloseable {
     }
 
     public int read(byte[] buffer) throws IOException {
-        int val;
-        if (piped) {
-            val = byteBuffer.read(buffer);
-        } else {
-            val = inputStream.read(buffer);
-        }
-        position += val;
-        return val;
+        return read(buffer, 0, buffer.length);
     }
 
     public int read(byte[] buffer, int offset, int length) throws IOException {
-        int val;
+        int totalBytesRead = 0;
         if (piped) {
-            val = byteBuffer.read(buffer, offset, length);
+            totalBytesRead = byteBuffer.read(buffer, offset, length);
         } else {
-            val = inputStream.read(buffer, offset, length);
+            while (length > 0) {
+                int bytesRead = inputStream.read(buffer, offset, length);
+                if (bytesRead > 0) {
+                    totalBytesRead += bytesRead;
+                    length -= bytesRead;
+                    offset += bytesRead;
+                } else {
+                    break;
+                }
+            }
         }
-        position += val;
-        return val;
+        if (totalBytesRead == 0) {
+            throw new EOFException();
+        }
+        position += totalBytesRead;
+        return totalBytesRead;
     }
 
     public byte readByte() throws IOException {
@@ -123,14 +128,25 @@ class CountingDataInputStream implements AutoCloseable {
     }
 
     public int skipBytes(int bytesToSkip) throws IOException {
-        int val;
+        int totalBytesSkipped = 0;
         if (piped) {
-            val = byteBuffer.skipBytes(bytesToSkip);
+            totalBytesSkipped = byteBuffer.skipBytes(bytesToSkip);
         } else {
-            val = inputStream.skipBytes(bytesToSkip);
+            while (bytesToSkip > 0) {
+                int bytesSkipped = inputStream.skipBytes(bytesToSkip);
+                if (bytesSkipped > 0) {
+                    totalBytesSkipped += bytesSkipped;
+                    bytesToSkip -= bytesSkipped;
+                } else {
+                    break;
+                }
+            }
         }
-        position += val;
-        return val;
+        if (totalBytesSkipped < bytesToSkip) {
+            TivoDecoder.logger.severe(String.format("Could only skip %d of %d requested bytes", totalBytesSkipped, bytesToSkip));
+        }
+        position += totalBytesSkipped;
+        return totalBytesSkipped;
     }
 
     @Override
@@ -167,7 +183,6 @@ class CountingDataInputStream implements AutoCloseable {
                         return;
                     }
                     moreData = destination.readFrom(source);
-                    Thread.yield();
                 }
                 TivoDecoder.logger.info("End of file reached");
             } catch (IOException e) {
@@ -223,9 +238,8 @@ class CountingDataInputStream implements AutoCloseable {
             writeLock.unlock();
             try {
                 Thread.sleep(readDelay);
-//                Thread.yield();
             } catch (InterruptedException e) {
-//
+                TivoDecoder.logger.warning("Stream reading thread interrupted");
             }
             return true;
         }
@@ -274,27 +288,27 @@ class CountingDataInputStream implements AutoCloseable {
             readPos = 0;
         }
 
-        public int read(byte[] destination) throws IOException {
-            boolean completed = false;
-            int val = 0;
-            while (!completed) {
-                readLock.lock();
-                if (readPos + destination.length <= writePos) {
-                    System.arraycopy(buffer.array(), readPos, destination, 0, destination.length);
-                    val = destination.length;
-                    readPos += val;
-                    completed = true;
-                } else if (sourceClosed) {
-                    readLock.unlock();
-                    throw new EOFException();
-                } else {
-                    TivoDecoder.logger.fine(String.format("Waiting for %d more bytes (readPos=%d, writePos=%d)",
-                            (readPos + destination.length) - writePos, readPos, writePos));
-                }
-                readLock.unlock();
-            }
-            return val;
-        }
+//        public int read(byte[] destination) throws IOException {
+//            boolean completed = false;
+//            int val = 0;
+//            while (!completed) {
+//                readLock.lock();
+//                if (readPos + destination.length <= writePos) {
+//                    System.arraycopy(buffer.array(), readPos, destination, 0, destination.length);
+//                    val = destination.length;
+//                    readPos += val;
+//                    completed = true;
+//                } else if (sourceClosed) {
+//                    readLock.unlock();
+//                    throw new EOFException();
+//                } else {
+//                    TivoDecoder.logger.fine(String.format("Waiting for %d more bytes (readPos=%d, writePos=%d)",
+//                            (readPos + destination.length) - writePos, readPos, writePos));
+//                }
+//                readLock.unlock();
+//            }
+//            return val;
+//        }
 
         public int read(byte[] destination, int offset, int length) throws IOException {
             boolean completed = false;

@@ -1,6 +1,4 @@
 /*
- * Copyright 2015 Todd Kulesza <todd@dropline.net>.
- *
  * This file is part of TivoLibre. TivoLibre is derived from
  * TivoDecode 0.4.4 by Jeremy Drake. See the LICENSE-TivoDecode
  * file for the licensing terms for TivoDecode.
@@ -28,6 +26,8 @@
 
 package net.straylightlabs.tivolibre;
 
+import java.util.Arrays;
+
 /**
  * WORD is defined as 4 bytes.
  */
@@ -35,6 +35,8 @@ class TuringReferenceImp {
     private int keylen;
     private int[] mixedKey = new int[MAXKEY / 4];
     private int[] shiftRegister = new int[LFSRLEN];
+    private byte[] sByteArray = new byte[4];
+    private int[] sWordArray = new int[4];
 
     public static final int MAXKEY = 32; // bytes
     public static final int MAXKIV = 48; // bytes
@@ -47,10 +49,10 @@ class TuringReferenceImp {
     }
 
     static private void word2ByteArray(int word, byte[] b, int offset) {
-        b[offset] = (byte) ((word >> 24) & 0xff);
-        b[offset + 1] = (byte) ((word >> 16) & 0xff);
-        b[offset + 2] = (byte) ((word >> 8) & 0xff);
-        b[offset + 3] = (byte) (word & 0xff);
+        b[offset] = (byte) (word >> 24);
+        b[offset + 1] = (byte) (word >> 16);
+        b[offset + 2] = (byte) (word >> 8);
+        b[offset + 3] = (byte) word;
     }
 
     /**
@@ -70,15 +72,17 @@ class TuringReferenceImp {
     /**
      * Step the LSFR.
      */
-    private void step() {
-        int i;
+    private void step(int steps) {
         int w;
 
-        w = shiftRegister[15] ^ shiftRegister[4] ^ (shiftRegister[0] << 8) ^ theMultab[(shiftRegister[0] >>> 24) & 0xff];
-        for (i = 1; i < LFSRLEN; ++i) {
-            shiftRegister[i - 1] = shiftRegister[i];
+        for (int i = 0; i < steps; i++) {
+            w = shiftRegister[15] ^ shiftRegister[4] ^ (shiftRegister[0] << 8) ^ theMultab[(shiftRegister[0] >>> 24) & 0xff];
+//        for (i = 1; i < LFSRLEN; ++i) {
+//            shiftRegister[i - 1] = shiftRegister[i];
+//        }
+            System.arraycopy(shiftRegister, 1, shiftRegister, 0, LFSRLEN - 1);
+            shiftRegister[LFSRLEN - 1] = w;
         }
-        shiftRegister[LFSRLEN - 1] = w;
     }
 
     /**
@@ -116,50 +120,31 @@ class TuringReferenceImp {
      */
     private int s(int w, int r) {
         int i;
-        byte[] b = new byte[4];
-        int[] ws = new int[4];
 
+        Arrays.fill(sWordArray, 0);
         w = leftRotateWord(w, r);
-        word2ByteArray(w, b, 0);
+        word2ByteArray(w, sByteArray, 0);
 
         for (i = 0; i < keylen; ++i) {
-            b[0] = (byte) theSBox[getByte(mixedKey[i], 0) ^ (b[0] & 0xff)];
-            ws[0] ^= leftRotateWord(theQBox[b[0] & 0xff], i);
+            sByteArray[0] = (byte) theSBox[getByte(mixedKey[i], 0) ^ (sByteArray[0] & 0xff)];
+            sWordArray[0] ^= leftRotateWord(theQBox[sByteArray[0] & 0xff], i);
 
-            b[1] = (byte) theSBox[getByte(mixedKey[i], 1) ^ (b[1] & 0xff)];
-            ws[1] ^= leftRotateWord(theQBox[b[1] & 0xff], i + 8);
+            sByteArray[1] = (byte) theSBox[getByte(mixedKey[i], 1) ^ (sByteArray[1] & 0xff)];
+            sWordArray[1] ^= leftRotateWord(theQBox[sByteArray[1] & 0xff], i + 8);
 
-            b[2] = (byte) theSBox[getByte(mixedKey[i], 2) ^ (b[2] & 0xff)];
-            ws[2] ^= leftRotateWord(theQBox[b[2] & 0xff], i + 16);
+            sByteArray[2] = (byte) theSBox[getByte(mixedKey[i], 2) ^ (sByteArray[2] & 0xff)];
+            sWordArray[2] ^= leftRotateWord(theQBox[sByteArray[2] & 0xff], i + 16);
 
-            b[3] = (byte) theSBox[getByte(mixedKey[i], 3) ^ (b[3] & 0xff)];
-            ws[3] ^= leftRotateWord(theQBox[b[3] & 0xff], i + 24);
+            sByteArray[3] = (byte) theSBox[getByte(mixedKey[i], 3) ^ (sByteArray[3] & 0xff)];
+            sWordArray[3] ^= leftRotateWord(theQBox[sByteArray[3] & 0xff], i + 24);
         }
 
-        w = (ws[0] & 0x00ffffff) | ((b[0] & 0xff) << 24);
-        w ^= (ws[1] & 0xff00ffff) | ((b[1] & 0xff) << 16);
-        w ^= (ws[2] & 0xffff00ff) | ((b[2] & 0xff) << 8);
-        w ^= (ws[3] & 0xffffff00) | (b[3] & 0xff);
+        w = (sWordArray[0] & 0x00ffffff) | ((sByteArray[0] & 0xff) << 24);
+        w ^= (sWordArray[1] & 0xff00ffff) | ((sByteArray[1] & 0xff) << 16);
+        w ^= (sWordArray[2] & 0xffff00ff) | ((sByteArray[2] & 0xff) << 8);
+        w ^= (sWordArray[3] & 0xffffff00) | (sByteArray[3] & 0xff);
 
         return w;
-    }
-
-    /**
-     * General word-wide n-PHT (Pseudo-Hadamard Transform)
-     */
-    static private void mixWords(int[] w, int n) {
-        int sum;
-        int i;
-
-        for (sum = i = 0; i < n - 1; ++i) {
-            sum += w[i];
-        }
-        w[n - 1] += sum;
-        sum = w[n - 1];
-
-        for (i = 0; i < n - 1; ++i) {
-            w[i] += sum;
-        }
     }
 
     /**
@@ -169,7 +154,7 @@ class TuringReferenceImp {
         int i;
 
         if ((length & 0x03) != 0 || length > MAXKEY) {
-            throw new IllegalArgumentException("invalid key length " + length);
+            throw new IllegalArgumentException("Invalid key length " + length);
         }
 
         keylen = 0;
@@ -192,7 +177,7 @@ class TuringReferenceImp {
         int i, j;
 
         if ((length & 0x03) != 0 || (length + 4 * keylen) > MAXKIV) {
-            throw new IllegalArgumentException("invalid IV length " + length);
+            throw new IllegalArgumentException("Invalid IV length " + length);
         }
 
         // first copy in the IV, mixing as we go
@@ -217,6 +202,23 @@ class TuringReferenceImp {
         mixWords(shiftRegister, LFSRLEN);
     }
 
+    /**
+     * General word-wide n-PHT (Pseudo-Hadamard Transform)
+     */
+    static private void mixWords(int[] w, int n) {
+        int sum;
+        int i;
+
+        for (sum = i = 0; i < n - 1; ++i) {
+            sum += w[i];
+        }
+        w[n - 1] += sum;
+        sum = w[n - 1];
+
+        for (i = 0; i < n - 1; ++i) {
+            w[i] += sum;
+        }
+    }
 
     public int turingGen(byte[] buf) {
         int bytesGenerated;
@@ -234,7 +236,7 @@ class TuringReferenceImp {
     private int turingGenRound(byte[] buf, int offset) {
         int a, b, c, d, e;
 
-        step();
+        step(1);
 
         a = shiftRegister[16];
         b = shiftRegister[13];
@@ -262,9 +264,7 @@ class TuringReferenceImp {
         c += e;
         d += e;
 
-        step();
-        step();
-        step();
+        step(3);
 
         a += shiftRegister[14];
         b += shiftRegister[12];
@@ -278,7 +278,7 @@ class TuringReferenceImp {
         word2ByteArray(d, buf, offset + 12);
         word2ByteArray(e, buf, offset + 16);
 
-        step();
+        step(1);
 
         return OUTLEN;
     }
