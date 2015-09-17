@@ -90,10 +90,10 @@ class TransportStreamPacket {
 
     private boolean checkHeader(Header header) {
         if (!header.isValid()) {
-            TivoDecoder.logger.warning("Invalid TS packet header for packet " + packetId);
+            TivoDecoder.logger.warn("Invalid TS packet header for packet {}", packetId);
             return false;
         } else if (header.hasTransportError()) {
-            TivoDecoder.logger.warning("Transport error flag set for packet " + packetId);
+            TivoDecoder.logger.warn("Transport error flag set for packet {}", packetId);
             return false;
         }
         return true;
@@ -152,9 +152,9 @@ class TransportStreamPacket {
         packetId = id;
     }
 
-    public long getPacketId() {
-        return packetId;
-    }
+//    public long getPacketId() {
+//        return packetId;
+//    }
 
     public PacketType getPacketType() {
         return header.getType();
@@ -349,9 +349,9 @@ class TransportStreamPacket {
 //            return hasPayloadData;
 //        }
 
-        public int getCounter() {
-            return counter;
-        }
+//        public int getCounter() {
+//            return counter;
+//        }
 
         @Override
         public String toString() {
@@ -399,9 +399,9 @@ class TransportStreamPacket {
             return isPrivate;
         }
 
-        public boolean isDiscontinuity() {
-            return isDiscontinuity;
-        }
+//        public boolean isDiscontinuity() {
+//            return isDiscontinuity;
+//        }
 
         @Override
         public String toString() {

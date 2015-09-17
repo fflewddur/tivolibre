@@ -86,12 +86,10 @@ class TransportStream extends Stream {
             copyPayloadToPesBuffer(packet);
             calculatePesHeaderOffset(packet);
         } catch (RuntimeException e) {
-            TivoDecoder.logger.severe("Exception while calculating PES header offset: " + e.getLocalizedMessage());
-            e.printStackTrace();
-            TivoDecoder.logger.info(packet.toString());
-            TivoDecoder.logger.info(String.format("Packet data:%n%s", TivoDecoder.bytesToHexString(packet.getBytes())));
-            TivoDecoder.logger.info(String.format("PES buffer:%n%s", TivoDecoder.bytesToHexString(pesBufferArray, 0, pesBuffer.limit())));
-            System.exit(0);
+            TivoDecoder.logger.error("Exception while calculating PES header offset: ", e);
+            TivoDecoder.logger.info("{}", packet);
+            TivoDecoder.logger.info("Packet data:\n{}", TivoDecoder.bytesToHexString(packet.getBytes()));
+            TivoDecoder.logger.info("PES buffer:\n{}", TivoDecoder.bytesToHexString(pesBufferArray, 0, pesBuffer.limit()));
             throw e;
         }
 
@@ -152,7 +150,7 @@ class TransportStream extends Stream {
 
     public boolean decryptBuffer(byte[] buffer) {
         if (!doHeader()) {
-            TivoDecoder.logger.severe("Problem parsing Turing header");
+            TivoDecoder.logger.error("Problem parsing Turing header");
             return false;
         }
         TuringStream turingStream = turingDecoder.prepareFrame(streamId, turingBlockNumber);
@@ -167,7 +165,7 @@ class TransportStream extends Stream {
         byte[] data = new byte[encryptedLength];
         System.arraycopy(encryptedData, packet.getPesHeaderOffset(), data, 0, encryptedLength);
         if (!decryptBuffer(data)) {
-            TivoDecoder.logger.severe("Decrypting packet failed");
+            TivoDecoder.logger.error("Decrypting packet failed");
             throw new RuntimeException("Decrypting packet failed");
         }
         return packet.getScrambledBytes(data);

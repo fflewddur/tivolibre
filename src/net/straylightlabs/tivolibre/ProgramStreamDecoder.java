@@ -51,7 +51,7 @@ class ProgramStreamDecoder extends StreamDecoder {
                     } else if (result == 0) {
                         outputStream.write(code);
                     } else if (result < 0) {
-                        TivoDecoder.logger.severe("Error processing frame");
+                        TivoDecoder.logger.error("Error processing frame");
                         return false;
                     }
                 } else if (!first) {
@@ -68,7 +68,7 @@ class ProgramStreamDecoder extends StreamDecoder {
             TivoDecoder.logger.info("End of file reached");
             return true;
         } catch (IOException e) {
-            TivoDecoder.logger.severe("Error reading transport stream: " + e.getLocalizedMessage());
+            TivoDecoder.logger.error("Error reading program stream: ", e);
         }
 
         return false;

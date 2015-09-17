@@ -54,7 +54,7 @@ public class ProgramStream extends Stream {
                 inputStream.read(header, headerBufferPosition, 5);
                 headerBufferPosition += 5;
                 if (((header[2] & 0xff) >> 6) != 0x2) {
-                    TivoDecoder.logger.warning(
+                    TivoDecoder.logger.warn(
                             String.format("PES (0x%02X) header mark != 0x2: 0x%x (is this an MPEG2-PS file?)",
                                     code, (header[2] & 0xff) >> 6)
                     );
@@ -107,7 +107,7 @@ public class ProgramStream extends Stream {
             int extByte = 5;
             boolean goAgain;
             if (headerLength > 27) {
-                TivoDecoder.logger.severe("Packet header length is too large: " + headerLength);
+                TivoDecoder.logger.error("Packet header length is too large: {}", headerLength);
                 return false;
             }
 
@@ -148,7 +148,7 @@ public class ProgramStream extends Stream {
         turingCrypted = 0;
         System.arraycopy(header, keyOffset, turingKey, 0, KEY_LENGTH);
         if (!doHeader()) {
-            TivoDecoder.logger.severe("doHeader encountered problems");
+            TivoDecoder.logger.error("Error setting up the decryption cipher");
             return false;
         }
         activeStream = turingDecoder.prepareFrame(code, turingBlockNumber);

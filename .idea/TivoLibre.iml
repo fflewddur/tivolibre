@@ -7,7 +7,9 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="library" name="commons-codec-1.9" level="project" />
-    <orderEntry type="library" name="commons-cli-1.3.1" level="project" />
+    <orderEntry type="library" name="commons-codec" level="project" />
+    <orderEntry type="library" name="commons-cli" level="project" />
+    <orderEntry type="library" name="slf4j-api" level="project" />
+    <orderEntry type="library" name="logback-classic" level="project" />
   </component>
 </module>

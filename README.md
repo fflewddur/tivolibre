@@ -29,10 +29,14 @@ The tivo-libre.jar file exposes the TivoDecoder class. TivoDecoder requires an I
         TivoDecoder.logger.severe(String.format("Error reading/writing files: %s", e.getLocalizedMessage()));
     }
 
+TivoLibre can be configured to use your app's existing logging framework via the SLF4J logging facade.
+
 # Dependencies
 TivoLibre makes use of the Stream APIs introduced in Java 8 and will not run on older Java virtual machines.
 
-TivoLibre requires commons-codec-1.9.jar and commons-cli-1.3.1.jar (or higher) from Apache Commons. These libraries are included in tivo-libre.jar. If you want to use TivoLibre in a project that already includes these libraries, you can use the tivo-libre-no-deps.jar file. The commons-cli JAR is only needed by the DecoderApp command-line application.
+When used as a stand-alone application, TivoLibre requires commons-codec-1.9.jar and commons-cli-1.3.1.jar (or higher) from Apache Commons, as well as SLF4J and Logback. These libraries are already included in tivo-libre.jar.
+
+When used as a library, TivoLibre only requires commons-codec-1.9.jar (or higher) and slf4j-api.jar. If you wish to view log output from TivoLibre, you'll also need the appropriate SLF4J bindings for your preferred logging framework.
 
 # Known Issues
-A list of known problems is available at https://github.com/fflewddur/tivolibre/issues.
+A list of known problems is available at https://github.com/fflewddur/tivolibre/issues. You can help us improve TivoLibre by reporting any problems you encounter.

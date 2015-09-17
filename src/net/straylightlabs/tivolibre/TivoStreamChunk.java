@@ -67,7 +67,7 @@ class TivoStreamChunk {
             int paddingBytes = chunkSize - dataSize - CHUNK_HEADER_SIZE;
             inputStream.skipBytes(paddingBytes);
         } catch (IOException | IllegalArgumentException e) {
-            TivoDecoder.logger.severe("Error reading chunk: " + e.getLocalizedMessage());
+            TivoDecoder.logger.error("Error reading chunk: ", e);
             return false;
         }
 

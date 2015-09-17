@@ -143,7 +143,7 @@ class CountingDataInputStream implements AutoCloseable {
             }
         }
         if (totalBytesSkipped < bytesToSkip) {
-            TivoDecoder.logger.severe(String.format("Could only skip %d of %d requested bytes", totalBytesSkipped, bytesToSkip));
+            TivoDecoder.logger.error("Could only skip {} of {} requested bytes", totalBytesSkipped, bytesToSkip);
         }
         position += totalBytesSkipped;
         return totalBytesSkipped;
@@ -151,7 +151,7 @@ class CountingDataInputStream implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
-        TivoDecoder.logger.info("Closing CountingDataInputStream. Final read position: " + position);
+        TivoDecoder.logger.debug("Closing CountingDataInputStream. Final read position: " + position);
         if (piped) {
             if (readerThread.isAlive()) {
                 readerThread.interrupt();
@@ -179,14 +179,14 @@ class CountingDataInputStream implements AutoCloseable {
                 boolean moreData = true;
                 while (moreData) {
                     if (Thread.interrupted()) {
-                        TivoDecoder.logger.info("StreamReader thread interrupted");
+                        TivoDecoder.logger.warn("StreamReader thread interrupted");
                         return;
                     }
                     moreData = destination.readFrom(source);
                 }
                 TivoDecoder.logger.info("End of file reached");
             } catch (IOException e) {
-                TivoDecoder.logger.severe("IOException reading file: " + e.getLocalizedMessage());
+                TivoDecoder.logger.error("IOException reading file: ", e);
             }
         }
     }
@@ -226,7 +226,7 @@ class CountingDataInputStream implements AutoCloseable {
                 int offset = writePos;
                 // Limit the number of bytes read to ensure we don't hold the writeLock for too long
                 int bytesRead = stream.read(bufferArray, offset, Math.min(bufferArray.length - offset, MAX_READ_SIZE));
-                TivoDecoder.logger.fine(String.format("Read %,d bytes from input stream", bytesRead));
+                TivoDecoder.logger.trace("Read {} bytes from input stream", bytesRead);
                 if (bytesRead == -1) {
                     sourceClosed = true;
                     writeLock.unlock();
@@ -239,7 +239,7 @@ class CountingDataInputStream implements AutoCloseable {
             try {
                 Thread.sleep(readDelay);
             } catch (InterruptedException e) {
-                TivoDecoder.logger.warning("Stream reading thread interrupted");
+                TivoDecoder.logger.error("Stream reading thread interrupted: ", e);
             }
             return true;
         }
@@ -256,11 +256,13 @@ class CountingDataInputStream implements AutoCloseable {
                 if (newBufferSize < 0) {
                     return false;
                 }
-                TivoDecoder.logger.info(String.format("Expanding buffer from %,d MB to %,d MB (readPos=%d, writePos=%d)",
-                        bufferArray.length / (1024 * 1024), newBufferSize / (1024 * 1024), readPos, writePos));
+                if (TivoDecoder.logger.isDebugEnabled()) {
+                    TivoDecoder.logger.debug(String.format("Expanding buffer from %,d MB to %,d MB (readPos=%d, writePos=%d)",
+                            bufferArray.length / (1024 * 1024), newBufferSize / (1024 * 1024), readPos, writePos));
+                }
                 resizeBuffer(newBufferSize);
                 readDelay *= 2;
-                TivoDecoder.logger.info(String.format("Increasing readDelay to %d ms", readDelay));
+                TivoDecoder.logger.debug("Increasing readDelay to {} ms", readDelay);
             }
             return true;
         }
@@ -268,8 +270,10 @@ class CountingDataInputStream implements AutoCloseable {
         private void shiftBufferIfNeeded() {
             if (readPos > bufferArray.length * SHIFT_RATIO) {
                 int newBufferSize = Math.max((writePos - readPos) * BUFFER_EXPAND_FACTOR, INITIAL_BUFFER_SIZE);
-                TivoDecoder.logger.info(String.format("Shifting buffer from %,d to %,d (resize to %d MB)",
-                        readPos, 0, newBufferSize / (1024 * 1024)));
+                if (TivoDecoder.logger.isDebugEnabled()) {
+                    TivoDecoder.logger.debug(String.format("Shifting buffer from %,d to %,d (resize to %d MB)",
+                            readPos, 0, newBufferSize / (1024 * 1024)));
+                }
                 resizeBuffer(newBufferSize);
             }
         }
@@ -288,28 +292,6 @@ class CountingDataInputStream implements AutoCloseable {
             readPos = 0;
         }
 
-//        public int read(byte[] destination) throws IOException {
-//            boolean completed = false;
-//            int val = 0;
-//            while (!completed) {
-//                readLock.lock();
-//                if (readPos + destination.length <= writePos) {
-//                    System.arraycopy(buffer.array(), readPos, destination, 0, destination.length);
-//                    val = destination.length;
-//                    readPos += val;
-//                    completed = true;
-//                } else if (sourceClosed) {
-//                    readLock.unlock();
-//                    throw new EOFException();
-//                } else {
-//                    TivoDecoder.logger.fine(String.format("Waiting for %d more bytes (readPos=%d, writePos=%d)",
-//                            (readPos + destination.length) - writePos, readPos, writePos));
-//                }
-//                readLock.unlock();
-//            }
-//            return val;
-//        }
-
         public int read(byte[] destination, int offset, int length) throws IOException {
             boolean completed = false;
             int val = 0;
@@ -324,8 +306,8 @@ class CountingDataInputStream implements AutoCloseable {
                     readLock.unlock();
                     throw new EOFException();
                 } else {
-                    TivoDecoder.logger.fine(String.format("Waiting for %d more bytes (readPos=%d, writePos=%d)",
-                            (readPos + length) - writePos, readPos, writePos));
+                    TivoDecoder.logger.trace("Waiting for {} more bytes (readPos={}, writePos={})",
+                            (readPos + length) - writePos, readPos, writePos);
                 }
                 readLock.unlock();
             }
@@ -345,8 +327,8 @@ class CountingDataInputStream implements AutoCloseable {
                     readLock.unlock();
                     throw new EOFException();
                 } else {
-                    TivoDecoder.logger.fine(String.format("Waiting for %d more bytes (readPos=%d, writePos=%d)",
-                            (readPos + Byte.BYTES) - writePos, readPos, writePos));
+                    TivoDecoder.logger.trace("Waiting for {} more bytes (readPos={}, writePos={})",
+                            (readPos + Byte.BYTES) - writePos, readPos, writePos);
                 }
                 readLock.unlock();
             }
@@ -366,8 +348,8 @@ class CountingDataInputStream implements AutoCloseable {
                     readLock.unlock();
                     throw new EOFException();
                 } else {
-                    TivoDecoder.logger.fine(String.format("Waiting for %d more bytes (readPos=%d, writePos=%d)",
-                            (readPos + Integer.BYTES) - writePos, readPos, writePos));
+                    TivoDecoder.logger.trace("Waiting for {} more bytes (readPos={}, writePos={})",
+                            (readPos + Integer.BYTES) - writePos, readPos, writePos);
                 }
                 readLock.unlock();
             }
@@ -387,8 +369,8 @@ class CountingDataInputStream implements AutoCloseable {
                     readLock.unlock();
                     throw new EOFException();
                 } else {
-                    TivoDecoder.logger.fine(String.format("Waiting for %d more bytes (readPos=%d, writePos=%d)",
-                            (readPos + Byte.BYTES) - writePos, readPos, writePos));
+                    TivoDecoder.logger.trace("Waiting for {} more bytes (readPos={}, writePos={})",
+                            (readPos + Byte.BYTES) - writePos, readPos, writePos);
                 }
                 readLock.unlock();
             }
@@ -408,8 +390,8 @@ class CountingDataInputStream implements AutoCloseable {
                     readLock.unlock();
                     throw new EOFException();
                 } else {
-                    TivoDecoder.logger.fine(String.format("Waiting for %d more bytes (readPos=%d, writePos=%d)",
-                            (readPos + Short.BYTES) - writePos, readPos, writePos));
+                    TivoDecoder.logger.trace("Waiting for {} more bytes (readPos={}, writePos={})",
+                            (readPos + Short.BYTES) - writePos, readPos, writePos);
                 }
                 readLock.unlock();
             }
@@ -428,8 +410,8 @@ class CountingDataInputStream implements AutoCloseable {
                     readLock.unlock();
                     throw new EOFException();
                 } else {
-                    TivoDecoder.logger.fine(String.format("Waiting for %d more bytes (readPos=%d, writePos=%d)",
-                            (readPos + bytesToSkip) - writePos, readPos, writePos));
+                    TivoDecoder.logger.trace("Waiting for {} more bytes (readPos={}, writePos={})",
+                            (readPos + bytesToSkip) - writePos, readPos, writePos);
                 }
                 readLock.unlock();
             }

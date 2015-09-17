@@ -22,10 +22,12 @@
 
 package net.straylightlabs.tivolibre;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import org.apache.commons.cli.*;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.util.logging.Level;
 
 /**
  * Simple driver application for command line use.
@@ -47,7 +49,7 @@ public class DecoderApp {
             CommandLineParser parser = new DefaultParser();
             cli = parser.parse(options, args);
         } catch (ParseException e) {
-            TivoDecoder.logger.severe("Parsing command line options failed: " + e.getLocalizedMessage());
+            TivoDecoder.logger.error("Parsing command line options failed: ", e);
             showUsage();
             return false;
         }
@@ -68,8 +70,12 @@ public class DecoderApp {
             System.exit(0);
         }
 
+        Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+
         if (cli.hasOption('d')) {
-            TivoDecoder.setLoggerLevel(Level.INFO);
+            root.setLevel(Level.DEBUG);
+        } else {
+            root.setLevel(Level.ERROR);
         }
 
         if (!cli.hasOption('m')) {
@@ -94,9 +100,7 @@ public class DecoderApp {
                 }
                 decode(inputStream, outputStream, cli.getOptionValue('m'));
             } catch (FileNotFoundException e) {
-                TivoDecoder.logger.severe(String.format("Input file %s not found: %s", cli.getOptionValue('i'),
-                                e.getLocalizedMessage())
-                );
+                TivoDecoder.logger.error("Input file {} not found: {}", cli.getOptionValue('i'), e.getLocalizedMessage());
             } finally {
                 if (inputStream != null) {
                     inputStream.close();
@@ -106,7 +110,7 @@ public class DecoderApp {
                 }
             }
         } catch (IOException e) {
-            TivoDecoder.logger.severe("IOException: " + e.getLocalizedMessage());
+            TivoDecoder.logger.error("IOException: {}", e.getLocalizedMessage(), e);
         }
     }
 
@@ -124,9 +128,9 @@ public class DecoderApp {
             }
             decoder.decode();
         } catch (FileNotFoundException e) {
-            TivoDecoder.logger.severe(String.format("Error: %s", e.getLocalizedMessage()));
+            TivoDecoder.logger.error("Error: {}", e.getLocalizedMessage());
         } catch (IOException e) {
-            TivoDecoder.logger.severe(String.format("Error reading/writing files: %s", e.getLocalizedMessage()));
+            TivoDecoder.logger.error("Error reading/writing files: {}", e.getLocalizedMessage());
         }
     }
 

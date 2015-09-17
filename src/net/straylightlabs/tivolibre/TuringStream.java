@@ -39,10 +39,6 @@ class TuringStream {
         turingReferenceImp = new TuringReferenceImp();
     }
 
-//    public int getStreamId() {
-//        return streamId;
-//    }
-
     public int getBlockId() {
         return blockId;
     }

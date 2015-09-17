@@ -49,7 +49,7 @@ class TivoStream {
             if (!header.read()) {
                 return false;
             }
-            TivoDecoder.logger.info("Header: " + header);
+            TivoDecoder.logger.debug("Header: " + header);
 
             chunks = new TivoStreamChunk[header.getNumChunks()];
             for (int i = 0; i < header.getNumChunks(); i++) {
@@ -66,11 +66,11 @@ class TivoStream {
                     decoder = new TuringDecoder(chunks[i].getKey(mak));
                     metaDecoder = new TuringDecoder(chunks[i].getMetadataKey(mak));
                 }
-                TivoDecoder.logger.info(String.format("Chunk %d: %s", i, chunks[i]));
+                TivoDecoder.logger.debug("Chunk {}: {}", i, chunks[i]);
             }
 
             StreamDecoder streamDecoder;
-            TivoDecoder.logger.info("File format: " + header.getFormat());
+            TivoDecoder.logger.debug("File format: " + header.getFormat());
             switch (header.getFormat()) {
                 case PROGRAM_STREAM:
                     streamDecoder = new ProgramStreamDecoder(decoder, header.getMpegOffset(), dataInputStream, outputStream);
@@ -79,14 +79,14 @@ class TivoStream {
                     streamDecoder = new TransportStreamDecoder(decoder, header.getMpegOffset(), dataInputStream, outputStream);
                     break;
                 default:
-                    TivoDecoder.logger.severe("Error: unknown file format.");
+                    TivoDecoder.logger.error("Error: unknown file format.");
                     return false;
             }
             if (!streamDecoder.process()) {
                 return false;
             }
         } catch (IOException e) {
-            TivoDecoder.logger.severe("Error reading TiVoStream file: " + e.getLocalizedMessage());
+            TivoDecoder.logger.error("Error reading TiVoStream file: ", e);
             return false;
         }
 

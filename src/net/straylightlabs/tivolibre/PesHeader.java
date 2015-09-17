@@ -75,10 +75,9 @@ public class PesHeader {
         }
         int startCodePrefix = getAndAdvanceBits(24);
         int startCodeValue = getAndAdvanceBits(BITS_PER_BYTE);
-//        TivoDecoder.logger.info(String.format("bitPos: %d startCodePrefix: 0x%06x", bitPos, startCodePrefix));
         while (startCodePrefix == START_CODE_PREFIX) {
             StartCode startCode = StartCode.valueOf(startCodeValue);
-//            TivoDecoder.logger.info("StartCode: " + startCode);
+            TivoDecoder.logger.trace("StartCode: " + startCode);
             switch (startCode) {
                 case ANCILLARY_DATA:
                 case SEQUENCE_END:
@@ -108,7 +107,7 @@ public class PesHeader {
                     parseUserData();
                     break;
                 default:
-                    TivoDecoder.logger.severe(String.format("Unknown PES start code: 0x%02x", startCodeValue));
+                    TivoDecoder.logger.warn(String.format("Unknown PES start code: 0x%02x", startCodeValue));
                     rewind(BITS_PER_INT);
                     return;
             }
@@ -126,7 +125,7 @@ public class PesHeader {
 //                    startCodePrefix, startCodeValue, bitPos));
         }
 
-//        TivoDecoder.logger.info("End of PES header. Bit length = " + bitLength);
+//        TivoDecoder.logger.debug("End of PES header. Bit length = " + bitLength);
     }
 
     /**
@@ -141,15 +140,16 @@ public class PesHeader {
         try {
 
             startCodePrefix = nextBits(24);
-//            TivoDecoder.logger.info(String.format("startCodePrefix: 0x%06x bitPos: %,d", startCodePrefix, bitPos));
+            if (TivoDecoder.logger.isTraceEnabled()) {
+                TivoDecoder.logger.trace(String.format("startCodePrefix: 0x%06x bitPos: %,d", startCodePrefix, bitPos));
+            }
             while (startCodePrefix == 0) {
                 advanceBits(BITS_PER_BYTE);
                 startCodeLength += BITS_PER_BYTE;
                 startCodePrefix = nextBits(24);
             }
         } catch (BufferUnderflowException e) {
-            // Ran out of buffer
-//            TivoDecoder.logger.info("Ran out of buffer");
+            TivoDecoder.logger.trace("Ran out of buffer");
         }
         if (startCodePrefix == START_CODE_PREFIX) {
             return true;
@@ -292,7 +292,7 @@ public class PesHeader {
                 parsePictureCodingExtension();
                 break;
             default:
-                TivoDecoder.logger.warning("Unknown PES extension header type: " + extensionType);
+                TivoDecoder.logger.warn("Unknown PES extension header type: {}", extensionType);
                 return false;
         }
         return true;

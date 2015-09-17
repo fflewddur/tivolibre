@@ -22,10 +22,11 @@
 
 package net.straylightlabs.tivolibre;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Decodes a TiVo file to a standard MPEG file.
@@ -36,14 +37,13 @@ public class TivoDecoder {
     private final OutputStream outputStream;
     private final String mak;
 
-    public static Logger logger;
+    public final static Logger logger;
 
     public final static String QUALCOMM_MSG = "Encryption by QUALCOMM";
     public final static String VERSION = "0.6.0";
 
     static {
-        logger = Logger.getLogger(TivoDecoder.class.getName());
-        logger.setLevel(Level.SEVERE);
+        logger = LoggerFactory.getLogger(TivoDecoder.class.toString());
     }
 
     public TivoDecoder(InputStream inputStream, OutputStream outputStream, String mak) {
@@ -56,14 +56,6 @@ public class TivoDecoder {
         logger.info(QUALCOMM_MSG);
         TivoStream stream = new TivoStream(inputStream, outputStream, mak);
         return stream.process();
-    }
-
-    public static void setLogger(Logger logger) {
-        TivoDecoder.logger = logger;
-    }
-
-    public static void setLoggerLevel(Level level) {
-        logger.setLevel(level);
     }
 
     public static String bytesToHexString(byte[] bytes, int offset, int length) {

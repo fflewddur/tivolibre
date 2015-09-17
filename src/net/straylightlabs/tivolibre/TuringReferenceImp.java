@@ -48,7 +48,7 @@ class TuringReferenceImp {
         return ((word >> (24 - 8 * i)) & 0xff);
     }
 
-    static private void word2ByteArray(int word, byte[] b, int offset) {
+    private static void word2ByteArray(int word, byte[] b, int offset) {
         b[offset] = (byte) (word >> 24);
         b[offset + 1] = (byte) (word >> 16);
         b[offset + 2] = (byte) (word >> 8);
@@ -58,14 +58,14 @@ class TuringReferenceImp {
     /**
      * Convert a byte[] to a WORD (big endian).
      */
-    static private int byteArray2Word(byte[] b, int offset) {
+    private static int byteArray2Word(byte[] b, int offset) {
         return ((b[offset] & 0xff) << 24) | ((b[offset + 1] & 0xff) << 16) | ((b[offset + 2] & 0xff) << 8) | (b[offset + 3] & 0xff);
     }
 
     /**
      * Convert a WORD (big endian) to a byte[].
      */
-    static private int leftRotateWord(int word, int bits) {
+    private static int leftRotateWord(int word, int bits) {
         return (word << bits) | (word >>> (32 - bits));
     }
 
@@ -77,9 +77,6 @@ class TuringReferenceImp {
 
         for (int i = 0; i < steps; i++) {
             w = shiftRegister[15] ^ shiftRegister[4] ^ (shiftRegister[0] << 8) ^ theMultab[(shiftRegister[0] >>> 24) & 0xff];
-//        for (i = 1; i < LFSRLEN; ++i) {
-//            shiftRegister[i - 1] = shiftRegister[i];
-//        }
             System.arraycopy(shiftRegister, 1, shiftRegister, 0, LFSRLEN - 1);
             shiftRegister[LFSRLEN - 1] = w;
         }
@@ -90,7 +87,7 @@ class TuringReferenceImp {
      * The reversibility isn't used, but it guarantees no loss of information,
      * and hence no equivalent keys or IVs.
      */
-    static private int fixedS(int w) {
+    private static int fixedS(int w) {
         int b;
 
         b = theSBox[getByte(w, 0)];

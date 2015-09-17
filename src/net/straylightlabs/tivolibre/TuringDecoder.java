@@ -94,10 +94,7 @@ class TuringDecoder {
                 stream.generate();
             }
             byte b = stream.getCipherByte();
-//            System.out.format("cipher pos: %d cipher len: %d cipher byte: %02x encoded byte: %02x ",
-//                    stream.getCipherPos(), stream.getCipherLen(), b, buffer[i]);
             buffer[i] ^= b;
-//            System.out.format("decoded byte: %02x%n", buffer[i]);
         }
     }
 }

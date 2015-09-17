@@ -62,7 +62,7 @@ class TivoStreamHeader {
             // Next two bytes tell us how many TiVo-specific chunks of data are coming
             numChunks = input.readUnsignedShort();
         } catch (IOException e) {
-            TivoDecoder.logger.severe("Error reading header: " + e.getLocalizedMessage());
+            TivoDecoder.logger.error("Error reading header: ", e);
             return false;
         }
 
