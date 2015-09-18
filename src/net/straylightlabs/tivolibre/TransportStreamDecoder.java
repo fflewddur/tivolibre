@@ -55,7 +55,7 @@ class TransportStreamDecoder extends StreamDecoder {
             while (true) {
                 fillBuffer();
 
-//                if (bytesWritten > 0x2ee000bfL) {
+//                if (bytesWritten > 0x2f4) {
 //                    return false;
 //                }
 
@@ -117,12 +117,12 @@ class TransportStreamDecoder extends StreamDecoder {
 
                 decryptAndWritePacket(packet);
                 if (TivoDecoder.logger.isDebugEnabled() && packetCounter % 100000 == 0) {
-//                if (bytesWritten > 0x930707ecL) {
+//                if (bytesWritten > 0) {
                     TivoDecoder.logger.debug(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
                                     packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
                     );
                     TivoDecoder.logger.debug("{}", packet);
-//                    TivoDecoder.logger.info("Packet data:\n" + packet.dump());
+//                    TivoDecoder.logger.debug("Packet data:\n" + packet.dump());
                 }
             }
         } catch (EOFException e) {
@@ -190,9 +190,8 @@ class TransportStreamDecoder extends StreamDecoder {
                         resumeDecryptionAtByte = bytesWritten + unsynchronizedLength;
                         TivoDecoder.logger.debug(String.format("Starting value for resumeDecryptionAtByte: 0x%x", resumeDecryptionAtByte));
                         // We'll resume decryption at the next position that's evenly divisible by the TS frame size
-                        for (;
-                             resumeDecryptionAtByte % DECRYPTION_PAUSED_INTERVAL != 0;
-                             resumeDecryptionAtByte += TransportStream.FRAME_SIZE) {
+                        while (resumeDecryptionAtByte % DECRYPTION_PAUSED_INTERVAL != 0) {
+                            resumeDecryptionAtByte += TransportStream.FRAME_SIZE;
                         }
                         TivoDecoder.logger.debug(String.format("Resume decryption at: 0x%x", resumeDecryptionAtByte));
                         boolean maskThirdByte = nextResumeDecryptionByteOffset == 0;
@@ -432,7 +431,7 @@ class TransportStreamDecoder extends StreamDecoder {
             // The DirectShow filter seems to do this; it's purpose is a mystery
             int offset = (int) (nextResumeDecryptionByteOffset - bytesWritten);
             if (packetBytes[offset] == SYNC_BYTE_VALUE) {
-                TivoDecoder.logger.debug(String.format("Found a sync byte at 0x%x", nextResumeDecryptionByteOffset));
+                TivoDecoder.logger.debug(String.format("Found a sync byte at 0x%x, masking next frame", nextResumeDecryptionByteOffset));
                 nextMaskByteOffset = nextResumeDecryptionByteOffset + TransportStream.FRAME_SIZE;
             }
             nextResumeDecryptionByteOffset += 0x100000;
@@ -443,6 +442,12 @@ class TransportStreamDecoder extends StreamDecoder {
             int offset = (int) (nextMaskByteOffset - bytesWritten);
             packetBytes[offset + 3] &= 0x3F;
             nextMaskByteOffset = 0;
+            if (packetBytes[offset] == SYNC_BYTE_VALUE) {
+                TivoDecoder.logger.debug(String.format("Found a sync byte at 0x%x, masking next frame", nextMaskByteOffset));
+                nextMaskByteOffset += TransportStream.FRAME_SIZE;
+            } else {
+                nextMaskByteOffset = 0;
+            }
         }
     }
 }

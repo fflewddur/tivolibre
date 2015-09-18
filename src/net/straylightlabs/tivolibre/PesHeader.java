@@ -45,8 +45,7 @@ public class PesHeader {
         try {
             parseBytes();
         } catch (BufferUnderflowException e) {
-            TivoDecoder.logger.info("BufferUnderflow: " + e.getLocalizedMessage());
-            bitLength = buffer.limit() * BITS_PER_BYTE;
+//            TivoDecoder.logger.debug("PES BufferUnderflow at bit position {}", bitPos);
         }
         buffer = null;
     }
@@ -55,9 +54,12 @@ public class PesHeader {
         return new PesHeader(buffer);
     }
 
+    /**
+     * Returns the length of the PES headers for the provided buffer.
+     */
     public int size() {
         if (isScrambled) {
-            // Scrambled packets need to be decoded
+            // Scrambled packets need to be decoded, so report a length of 0
             return 0;
         }
 
@@ -77,7 +79,7 @@ public class PesHeader {
         int startCodeValue = getAndAdvanceBits(BITS_PER_BYTE);
         while (startCodePrefix == START_CODE_PREFIX) {
             StartCode startCode = StartCode.valueOf(startCodeValue);
-            TivoDecoder.logger.trace("StartCode: " + startCode);
+//            TivoDecoder.logger.debug("StartCode: " + startCode);
             switch (startCode) {
                 case ANCILLARY_DATA:
                 case SEQUENCE_END:
@@ -112,7 +114,7 @@ public class PesHeader {
                     return;
             }
 
-//            TivoDecoder.logger.info(String.format("startCodePrefix=0x%06x startCode=%s bitPos=%,d bitLength=%,d bitLimit=%,d",
+//            TivoDecoder.logger.debug(String.format("startCodePrefix=0x%06x startCode=%s bitPos=%,d bitLength=%,d bitLimit=%,d",
 //                    startCodePrefix, startCode, bitPos, bitLength, buffer.limit() * BITS_PER_BYTE));
 
             if (nextStartCode()) {
@@ -121,10 +123,9 @@ public class PesHeader {
             } else {
                 startCodePrefix = NOT_A_START_CODE;
             }
-//            TivoDecoder.logger.info(String.format("next startCodePrefix=0x%08x next startCodeValue=0x%02x bitPos=%,d",
+//            TivoDecoder.logger.debug(String.format("next startCodePrefix=0x%08x next startCodeValue=0x%02x bitPos=%,d",
 //                    startCodePrefix, startCodeValue, bitPos));
         }
-
 //        TivoDecoder.logger.debug("End of PES header. Bit length = " + bitLength);
     }
 
@@ -133,37 +134,46 @@ public class PesHeader {
      * they should be 0-padded such that the 24-bit start code and 8-bit stream ID fit in a byte-aligned 32-bit int.
      */
     private boolean nextStartCode() {
-        byteAlign();
+        if (!byteAlign()) {
+            return false;
+        }
 
         int startCodePrefix = NOT_A_START_CODE;
         int startCodeLength = 0;
         try {
-
             startCodePrefix = nextBits(24);
-            if (TivoDecoder.logger.isTraceEnabled()) {
-                TivoDecoder.logger.trace(String.format("startCodePrefix: 0x%06x bitPos: %,d", startCodePrefix, bitPos));
-            }
+//            if (TivoDecoder.logger.isTraceEnabled()) {
+//                TivoDecoder.logger.trace(String.format("startCodePrefix: 0x%06x bitPos: %,d", startCodePrefix, bitPos));
+//            }
             while (startCodePrefix == 0) {
                 advanceBits(BITS_PER_BYTE);
                 startCodeLength += BITS_PER_BYTE;
                 startCodePrefix = nextBits(24);
             }
         } catch (BufferUnderflowException e) {
-            TivoDecoder.logger.trace("Ran out of buffer");
+//            TivoDecoder.logger.debug("Ran out of buffer while searching for next start code");
         }
         if (startCodePrefix == START_CODE_PREFIX) {
             return true;
         } else {
-            rewind(startCodeLength);
+            if (startCodeLength > 0) {
+//                TivoDecoder.logger.debug("Rewinding {} bits", startCodeLength);
+                rewind(startCodeLength);
+            }
             return false;
         }
     }
 
-    private void byteAlign() {
-        int alignDelta = bitPos % BITS_PER_BYTE;
-        if (alignDelta > 0) {
-            advanceBits(alignDelta);
+    private boolean byteAlign() {
+        while (bitPos % BITS_PER_BYTE != 0) {
+            if (nextBits(1) == 1) {
+                TivoDecoder.logger.debug("Found a 1 during byte alignment; there can't be another start code after this");
+                return false;
+            } else {
+                advanceBits(1);
+            }
         }
+        return true;
     }
 
     private int nextBits(int bits) {
@@ -258,8 +268,15 @@ public class PesHeader {
             bitsToAdvance += 4;
         }
         advanceBits(bitsToAdvance);
-        while (getAndAdvanceBits(1) == 1) {
-            advanceBits(8);
+
+        // Picture headers may end with stuffing bytes; skip over them, but don't let them extend into the next frame
+        try {
+            while (getAndAdvanceBits(1) == 1) {
+                advanceBits(8);
+            }
+        } catch (BufferUnderflowException e) {
+            bitPos = buffer.limit() * BITS_PER_BYTE;
+            bitLength = buffer.limit() * BITS_PER_BYTE;
         }
     }
 

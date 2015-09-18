@@ -1,5 +1,3 @@
-/* @(#)TuringFast.c	1.6 (QUALCOMM Turing) 03/02/24 */
-
 /*
  * Fast (unrolled) implementation of Turing
  *
@@ -11,88 +9,94 @@
  */
 
 /*
-This software is free for commercial and non-commercial use subject to
-the following conditions:
+    This software is free for commercial and non-commercial use subject to
+    the following conditions:
 
-1.  Copyright remains vested in QUALCOMM Incorporated, and Copyright
-notices in the code are not to be removed.  If this package is used in
-a product, QUALCOMM should be given attribution as the author of the
-Turing encryption algorithm. This can be in the form of a textual
-message at program startup or in documentation (online or textual)
-provided with the package.
+    1.  Copyright remains vested in QUALCOMM Incorporated, and Copyright
+    notices in the code are not to be removed.  If this package is used in
+    a product, QUALCOMM should be given attribution as the author of the
+    Turing encryption algorithm. This can be in the form of a textual
+    message at program startup or in documentation (online or textual)
+    provided with the package.
 
-2.  Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
+    2.  Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are
+    met:
 
-a. Redistributions of source code must retain the copyright notice,
-   this list of conditions and the following disclaimer.
+    a. Redistributions of source code must retain the copyright notice,
+       this list of conditions and the following disclaimer.
 
-b. Redistributions in binary form must reproduce the above copyright
-   notice, this list of conditions and the following disclaimer in the
-   documentation and/or other materials provided with the
-   distribution.
+    b. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the
+       distribution.
 
-c. All advertising materials mentioning features or use of this
-   software must display the following acknowledgement:  This product
-   includes software developed by QUALCOMM Incorporated.
+    c. All advertising materials mentioning features or use of this
+       software must display the following acknowledgement:  This product
+       includes software developed by QUALCOMM Incorporated.
 
-3.  THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
-WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE AND AGAINST
-INFRINGEMENT ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR
-CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+    3.  THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+    WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+    MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE AND AGAINST
+    INFRINGEMENT ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+    LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-4.  The license and distribution terms for any publically available version
-or derivative of this code cannot be changed, that is, this code cannot
-simply be copied and put under another distribution license including
-the GNU Public License.
+    4.  The license and distribution terms for any publically available version
+    or derivative of this code cannot be changed, that is, this code cannot
+    simply be copied and put under another distribution license including
+    the GNU Public License.
 
-5.  The Turing family of encryption algorithms are covered by patents in
-the United States of America and other countries. A free and
-irrevocable license is hereby granted for the use of such patents to
-the extent required to utilize the Turing family of encryption
-algorithms for any purpose, subject to the condition that any
-commercial product utilising any of the Turing family of encryption
-algorithms should show the words "Encryption by QUALCOMM" either on the
-product or in the associated documentation.
+    5.  The Turing family of encryption algorithms are covered by patents in
+    the United States of America and other countries. A free and
+    irrevocable license is hereby granted for the use of such patents to
+    the extent required to utilize the Turing family of encryption
+    algorithms for any purpose, subject to the condition that any
+    commercial product utilising any of the Turing family of encryption
+    algorithms should show the words "Encryption by QUALCOMM" either on the
+    product or in the associated documentation.
 */
 
-package net.straylightlabs.tivolibre;
+package net.straylightlabs.quickturing;
 
 /**
- * WORD is defined as 4 bytes.
+ * A fast Java implementation of Qualcomm's Turing stream cipher.
  */
-class TuringReferenceImp {
-    private int keylen;
-    private int[] mixedKey = new int[MAXKEY / 4];
-    private int[] shiftRegister = new int[LFSRLEN];
+public class QuickTuring {
+    private int keyLength;
+    private int[] mixedKey = new int[MAX_KEY_LENGTH / 4];
+    private int[] shiftRegister = new int[SHIFT_REGISTER_LENGTH];
     private int[] s0 = new int[256];
     private int[] s1 = new int[256];
     private int[] s2 = new int[256];
     private int[] s3 = new int[256];
 
-    public static final int MAXKEY = 32; // bytes
-    public static final int MAXKIV = 48; // bytes
-    public static final int MAXSTREAM = 340; // bytes, maximum stream generated by one call
-    public static final int LFSRLEN = 17; // words
-    public static final int OUTLEN = 20; // bytes
+    public static final int MAX_KEY_LENGTH = 32; // bytes
+    public static final int MAX_IV_LENGTH = 48; // bytes
+    public static final int MAX_STREAM_LENGTH = 340; // bytes, maximum stream generated by one call
+    public static final int SHIFT_REGISTER_LENGTH = 17; // words
+    public static final int ROUND_OUTPUT_LENGTH = 20; // bytes
 
-    private static int getByte(int word, int i) {
-        return ((word >> (24 - 8 * i)) & 0xff);
-    }
+    /**
+     * Sets the key on the cipher instance.
+     */
+    public void setTuringKey(byte[] key, int length) {
+        if ((length & 0x03) != 0 || length > MAX_KEY_LENGTH) {
+            throw new IllegalArgumentException("Invalid key length " + length);
+        }
 
-    private static void word2ByteArray(int word, byte[] b, int offset) {
-        b[offset] = (byte) (word >> 24);
-        b[offset + 1] = (byte) (word >> 16);
-        b[offset + 2] = (byte) (word >> 8);
-        b[offset + 3] = (byte) word;
+        keyLength = 0;
+        for (int i = 0; i < length; i += 4) {
+            mixedKey[keyLength++] = fixedS(byteArray2Word(key, i));
+        }
+        mixWords(mixedKey, keyLength);
+
+        buildSBoxTables();
     }
 
     /**
@@ -102,67 +106,22 @@ class TuringReferenceImp {
         return ((b[offset] & 0xff) << 24) | ((b[offset + 1] & 0xff) << 16) | ((b[offset + 2] & 0xff) << 8) | (b[offset + 3] & 0xff);
     }
 
-    /**
-     * Convert a WORD (big endian) to a byte[].
-     */
-    private static int leftRotateWord(int word, int bits) {
-        return (word << bits) | (word >>> (32 - bits));
-    }
-
-    /**
-     * Step the LSFR.
-     */
-    private void step(int z) {
-        shiftRegister[offset(z, 0)] = shiftRegister[offset(z, 15)] ^ shiftRegister[offset(z, 4)] ^
-                (shiftRegister[offset(z, 0)] << 8) ^ theMultab[(shiftRegister[offset(z, 0)] >>> 24) & 0xFF];
-//        int w;
-
-//        for (int i = 0; i < steps; i++) {
-//            w = shiftRegister[15] ^ shiftRegister[4] ^ (shiftRegister[0] << 8) ^ theMultab[(shiftRegister[0] >>> 24) & 0xff];
-//            System.arraycopy(shiftRegister, 1, shiftRegister, 0, LFSRLEN - 1);
-//            shiftRegister[LFSRLEN - 1] = w;
-//        }
-    }
-
-    private static int offset(int zero, int i) {
-        return (zero + i) % LFSRLEN;
-    }
-
-    /**
-     * Sets the key on the cipher instance.
-     */
-    public void setTuringKey(byte[] key, int length) {
-        int i;
-
-        if ((length & 0x03) != 0 || length > MAXKEY) {
-            throw new IllegalArgumentException("Invalid key length " + length);
-        }
-
-        keylen = 0;
-        for (i = 0; i < length; i += 4) {
-            mixedKey[keylen++] = fixedS(byteArray2Word(key, i));
-        }
-        mixWords(mixedKey, keylen);
-
-        buildSBoxTables();
-    }
-
     private void buildSBoxTables() {
         int i;
 
         for (int j = 0; j < 256; ++j) {
             int w = 0;
             int k = j;
-            for (i = 0; i < keylen; ++i) {
+            for (i = 0; i < keyLength; ++i) {
                 k = theSBox[getByte(mixedKey[i], 0) ^ k];
-                w ^= leftRotateWord(theQBox[k], i + 0);
+                w ^= leftRotateWord(theQBox[k], i);
             }
             s0[j] = (w & 0x00FFFFFF) | (k << 24);
         }
         for (int j = 0; j < 256; ++j) {
             int w = 0;
             int k = j;
-            for (i = 0; i < keylen; ++i) {
+            for (i = 0; i < keyLength; ++i) {
                 k = theSBox[getByte(mixedKey[i], 1) ^ k];
                 w ^= leftRotateWord(theQBox[k], i + 8);
             }
@@ -171,7 +130,7 @@ class TuringReferenceImp {
         for (int j = 0; j < 256; ++j) {
             int w = 0;
             int k = j;
-            for (i = 0; i < keylen; ++i) {
+            for (i = 0; i < keyLength; ++i) {
                 k = theSBox[getByte(mixedKey[i], 2) ^ k];
                 w ^= leftRotateWord(theQBox[k], i + 16);
             }
@@ -180,12 +139,26 @@ class TuringReferenceImp {
         for (int j = 0; j < 256; ++j) {
             int w = 0;
             int k = j;
-            for (i = 0; i < keylen; ++i) {
+            for (i = 0; i < keyLength; ++i) {
                 k = theSBox[getByte(mixedKey[i], 3) ^ k];
                 w ^= leftRotateWord(theQBox[k], i + 24);
             }
             s3[j] = (w & 0xFFFFFF00) | k;
         }
+    }
+
+    /**
+     * Return the byte at offset @i of @word.
+     */
+    private static int getByte(int word, int i) {
+        return ((word >> (24 - 8 * i)) & 0xff);
+    }
+
+    /**
+     * Convert a WORD (big endian) to a byte[].
+     */
+    private static int leftRotateWord(int word, int bits) {
+        return (word << bits) | (word >>> (32 - bits));
     }
 
     /**
@@ -200,7 +173,7 @@ class TuringReferenceImp {
     public void setTuringIV(byte[] iv, int length) {
         int i, j;
 
-        if ((length & 0x03) != 0 || (length + 4 * keylen) > MAXKIV) {
+        if ((length & 0x03) != 0 || (length + 4 * keyLength) > MAX_IV_LENGTH) {
             throw new IllegalArgumentException("Invalid IV length " + length);
         }
 
@@ -210,20 +183,20 @@ class TuringReferenceImp {
         }
 
         // continue with premixed key
-        for (j = 0; j < keylen; ++j) {
+        for (j = 0; j < keyLength; ++j) {
             shiftRegister[i++] = mixedKey[j];
         }
 
         // length-dependent word
-        shiftRegister[i++] = (keylen << 4) | (length >> 2) | 0x01020300;
+        shiftRegister[i++] = (keyLength << 4) | (length >> 2) | 0x01020300;
 
         // fill the rest of the register
-        for (j = 0; i < LFSRLEN; ++i, ++j) {
+        for (j = 0; i < SHIFT_REGISTER_LENGTH; ++i, ++j) {
             shiftRegister[i] = s(shiftRegister[j] + shiftRegister[i - 1], 0);
         }
 
         // mix all the words
-        mixWords(shiftRegister, LFSRLEN);
+        mixWords(shiftRegister, SHIFT_REGISTER_LENGTH);
     }
 
     /**
@@ -260,36 +233,10 @@ class TuringReferenceImp {
      * trail allowed by the PHT.
      */
     private int s(int w, int r) {
-        return (s0[getByte(w, (0 + r) & 0x3)]
+        return (s0[getByte(w, (r) & 0x3)]
                 ^ s1[getByte(w, (1 + r) & 0x3)]
                 ^ s2[getByte(w, (2 + r) & 0x3)]
                 ^ s3[getByte(w, (3 + r) & 0x3)]);
-//        int i;
-//
-//        Arrays.fill(sWordArray, 0);
-//        w = leftRotateWord(w, r);
-//        word2ByteArray(w, sByteArray, 0);
-//
-//        for (i = 0; i < keylen; ++i) {
-//            sByteArray[0] = (byte) theSBox[getByte(mixedKey[i], 0) ^ (sByteArray[0] & 0xff)];
-//            sWordArray[0] ^= leftRotateWord(theQBox[sByteArray[0] & 0xff], i);
-//
-//            sByteArray[1] = (byte) theSBox[getByte(mixedKey[i], 1) ^ (sByteArray[1] & 0xff)];
-//            sWordArray[1] ^= leftRotateWord(theQBox[sByteArray[1] & 0xff], i + 8);
-//
-//            sByteArray[2] = (byte) theSBox[getByte(mixedKey[i], 2) ^ (sByteArray[2] & 0xff)];
-//            sWordArray[2] ^= leftRotateWord(theQBox[sByteArray[2] & 0xff], i + 16);
-//
-//            sByteArray[3] = (byte) theSBox[getByte(mixedKey[i], 3) ^ (sByteArray[3] & 0xff)];
-//            sWordArray[3] ^= leftRotateWord(theQBox[sByteArray[3] & 0xff], i + 24);
-//        }
-//
-//        w = (sWordArray[0] & 0x00ffffff) | ((sByteArray[0] & 0xff) << 24);
-//        w ^= (sWordArray[1] & 0xff00ffff) | ((sByteArray[1] & 0xff) << 16);
-//        w ^= (sWordArray[2] & 0xffff00ff) | ((sByteArray[2] & 0xff) << 8);
-//        w ^= (sWordArray[3] & 0xffffff00) | (sByteArray[3] & 0xff);
-//
-//        return w;
     }
 
     /**
@@ -315,7 +262,7 @@ class TuringReferenceImp {
      * Return the number of bytes generated
      */
     public int turingGen(byte[] buf) {
-        if (buf.length < MAXSTREAM) {
+        if (buf.length < MAX_STREAM_LENGTH) {
             throw new IllegalArgumentException("Buffer is too small");
         }
 
@@ -337,7 +284,7 @@ class TuringReferenceImp {
         turingGenRound(7, buf, 300);
         turingGenRound(12, buf, 320);
 
-        return MAXSTREAM;
+        return MAX_STREAM_LENGTH;
     }
 
     /**
@@ -394,7 +341,32 @@ class TuringReferenceImp {
 
         step(z + 4);
 
-        return OUTLEN;
+        return ROUND_OUTPUT_LENGTH;
+    }
+
+    /**
+     * Step the LSFR.
+     */
+    private void step(int z) {
+        shiftRegister[offset(z, 0)] = shiftRegister[offset(z, 15)] ^ shiftRegister[offset(z, 4)] ^
+                (shiftRegister[offset(z, 0)] << 8) ^ theMultab[(shiftRegister[offset(z, 0)] >>> 24) & 0xFF];
+    }
+
+    /**
+     * Calculate the offset for the current position of the shift register.
+     */
+    private static int offset(int zero, int i) {
+        return (zero + i) % SHIFT_REGISTER_LENGTH;
+    }
+
+    /**
+     * Word is defined as 4 bytes.
+     */
+    private static void word2ByteArray(int word, byte[] b, int offset) {
+        b[offset] = (byte) (word >> 24);
+        b[offset + 1] = (byte) (word >> 16);
+        b[offset + 2] = (byte) (word >> 8);
+        b[offset + 3] = (byte) word;
     }
 
     /**

@@ -23,6 +23,7 @@
 package net.straylightlabs.tivolibre;
 
 import java.util.Arrays;
+import net.straylightlabs.quickturing.QuickTuring;
 
 class TuringStream {
     private int streamId;
@@ -30,13 +31,13 @@ class TuringStream {
     private int cipherPos;
     private int cipherLen;
     private byte[] cipherData;
-    private TuringReferenceImp turingReferenceImp;
+    private QuickTuring quickTuring;
 
     public TuringStream(int streamId, int blockId) {
         this.streamId = streamId;
         this.blockId = blockId;
-        cipherData = new byte[TuringReferenceImp.MAXSTREAM + Long.BYTES];
-        turingReferenceImp = new TuringReferenceImp();
+        cipherData = new byte[QuickTuring.MAX_STREAM_LENGTH + Long.BYTES];
+        quickTuring = new QuickTuring();
     }
 
     public int getBlockId() {
@@ -63,7 +64,7 @@ class TuringStream {
     }
 
     public void generate() {
-        cipherLen = turingReferenceImp.turingGen(cipherData);
+        cipherLen = quickTuring.turingGen(cipherData);
         cipherPos = 0;
     }
 
@@ -71,10 +72,10 @@ class TuringStream {
         this.streamId = streamId;
         this.blockId = blockId;
         cipherPos = 0;
-        turingReferenceImp.setTuringKey(turkey, 20);
-        turingReferenceImp.setTuringIV(turiv, 20);
+        quickTuring.setTuringKey(turkey, 20);
+        quickTuring.setTuringIV(turiv, 20);
         Arrays.fill(cipherData, (byte) 0);
-        cipherLen = turingReferenceImp.turingGen(cipherData);
+        cipherLen = quickTuring.turingGen(cipherData);
     }
 
     @Override
