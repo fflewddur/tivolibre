@@ -111,12 +111,18 @@ class BatchTester:
         referencePath = outputPath.replace(self.args.ourExtension, self.args.refExtension)
         print("Comparing output to reference file {}...".format(referencePath))
         result = subprocess.run(['diff', outputPath, referencePath])
+
+        filesAreSame = None
         if result.returncode is not 0:
             print(bcolors.FAIL + "These files are different :(" + bcolors.ENDC)
-            return False
+            filesAreSame = False
         else:
             print(bcolors.OKGREEN + "These files are identical!" + bcolors.ENDC)
-            return True
+            filesAreSame = True
+
+        print("Deleting output file...")
+        os.remove(outputPath)
+        return filesAreSame
 
     def printResults(self, perfectFiles, filesWithDifferences):
         if perfectFiles:
