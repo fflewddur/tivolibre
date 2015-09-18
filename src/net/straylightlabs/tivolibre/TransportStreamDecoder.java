@@ -389,6 +389,24 @@ class TransportStreamDecoder extends StreamDecoder {
     }
 
     private void decryptAndWritePacket(TransportStreamPacket packet) {
+        TransportStream stream = getPacketStream(packet);
+        byte[] packetBytes = stream.processPacket(packet);
+
+        if (decryptionPaused) {
+            maskBytes(packetBytes);
+        }
+
+        writePacketBytes(packetBytes);
+
+        if (resumeDecryptionAtByte > 0 && resumeDecryptionAtByte <= bytesWritten) {
+            TivoDecoder.logger.info(String.format("Resuming decryption at 0x%x, bytesWritten = 0x%x",
+                            resumeDecryptionAtByte, bytesWritten)
+            );
+            resumeDecryption();
+        }
+    }
+
+    private TransportStream getPacketStream(TransportStreamPacket packet) {
         TransportStream stream = streams.get(packet.getPID());
         if (stream == null) {
             // TODO drop these packets unless in compatibility mode
@@ -398,28 +416,7 @@ class TransportStreamDecoder extends StreamDecoder {
             stream = new TransportStream(turingDecoder);
             streams.put(packet.getPID(), stream);
         }
-
-        byte[] packetBytes = stream.processPacket(packet);
-
-        if (decryptionPaused) {
-            maskBytes(packetBytes);
-        }
-
-        try {
-            // TODO Drop any packets while decryption is paused, unless in compatibility mode
-            outputStream.write(packetBytes);
-            bytesWritten += packetBytes.length;
-        } catch (Exception e) {
-            TivoDecoder.logger.error("Error writing file: ", e);
-            throw new RuntimeException();
-        }
-
-        if (resumeDecryptionAtByte > 0 && resumeDecryptionAtByte <= bytesWritten) {
-            TivoDecoder.logger.info(String.format("Resuming decryption at 0x%x, bytesWritten = 0x%x",
-                            resumeDecryptionAtByte, bytesWritten)
-            );
-            resumeDecryption();
-        }
+        return stream;
     }
 
     /**
@@ -448,6 +445,17 @@ class TransportStreamDecoder extends StreamDecoder {
             } else {
                 nextMaskByteOffset = 0;
             }
+        }
+    }
+
+    private void writePacketBytes(byte[] packetBytes) {
+        try {
+            // TODO Drop any packets while decryption is paused, unless in compatibility mode
+            outputStream.write(packetBytes);
+            bytesWritten += packetBytes.length;
+        } catch (Exception e) {
+            TivoDecoder.logger.error("Error writing file: ", e);
+            throw new RuntimeException();
         }
     }
 }
