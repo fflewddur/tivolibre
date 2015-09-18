@@ -1,32 +1,70 @@
+/* @(#)TuringFast.c	1.6 (QUALCOMM Turing) 03/02/24 */
+
 /*
- * This file is part of TivoLibre. TivoLibre is derived from
- * TivoDecode 0.4.4 by Jeremy Drake. See the LICENSE-TivoDecode
- * file for the licensing terms for TivoDecode.
+ * Fast (unrolled) implementation of Turing
  *
- * TivoLibre is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Copyright C 2002, Qualcomm Inc. Written by Greg Rose
  *
- * TivoLibre is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Initial Java port by Joseph A Dudar <jdudar@yahoo.com>
  *
- * You should have received a copy of the GNU General Public License
- * along with TivoLibre.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * Optimized Java port by Todd Kulesza <todd@dropline.net>
  */
 
 /*
- * Originally from http://www.jdudar.com/turing/index.html
- *
- * Modified to support the Turing implementation used on TiVo video files.
- */
+This software is free for commercial and non-commercial use subject to
+the following conditions:
+
+1.  Copyright remains vested in QUALCOMM Incorporated, and Copyright
+notices in the code are not to be removed.  If this package is used in
+a product, QUALCOMM should be given attribution as the author of the
+Turing encryption algorithm. This can be in the form of a textual
+message at program startup or in documentation (online or textual)
+provided with the package.
+
+2.  Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+a. Redistributions of source code must retain the copyright notice,
+   this list of conditions and the following disclaimer.
+
+b. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the
+   distribution.
+
+c. All advertising materials mentioning features or use of this
+   software must display the following acknowledgement:  This product
+   includes software developed by QUALCOMM Incorporated.
+
+3.  THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE AND AGAINST
+INFRINGEMENT ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+4.  The license and distribution terms for any publically available version
+or derivative of this code cannot be changed, that is, this code cannot
+simply be copied and put under another distribution license including
+the GNU Public License.
+
+5.  The Turing family of encryption algorithms are covered by patents in
+the United States of America and other countries. A free and
+irrevocable license is hereby granted for the use of such patents to
+the extent required to utilize the Turing family of encryption
+algorithms for any purpose, subject to the condition that any
+commercial product utilising any of the Turing family of encryption
+algorithms should show the words "Encryption by QUALCOMM" either on the
+product or in the associated documentation.
+*/
 
 package net.straylightlabs.tivolibre;
-
-import java.util.Arrays;
 
 /**
  * WORD is defined as 4 bytes.
@@ -35,8 +73,10 @@ class TuringReferenceImp {
     private int keylen;
     private int[] mixedKey = new int[MAXKEY / 4];
     private int[] shiftRegister = new int[LFSRLEN];
-    private byte[] sByteArray = new byte[4];
-    private int[] sWordArray = new int[4];
+    private int[] s0 = new int[256];
+    private int[] s1 = new int[256];
+    private int[] s2 = new int[256];
+    private int[] s3 = new int[256];
 
     public static final int MAXKEY = 32; // bytes
     public static final int MAXKIV = 48; // bytes
@@ -72,76 +112,20 @@ class TuringReferenceImp {
     /**
      * Step the LSFR.
      */
-    private void step(int steps) {
-        int w;
+    private void step(int z) {
+        shiftRegister[offset(z, 0)] = shiftRegister[offset(z, 15)] ^ shiftRegister[offset(z, 4)] ^
+                (shiftRegister[offset(z, 0)] << 8) ^ theMultab[(shiftRegister[offset(z, 0)] >>> 24) & 0xFF];
+//        int w;
 
-        for (int i = 0; i < steps; i++) {
-            w = shiftRegister[15] ^ shiftRegister[4] ^ (shiftRegister[0] << 8) ^ theMultab[(shiftRegister[0] >>> 24) & 0xff];
-            System.arraycopy(shiftRegister, 1, shiftRegister, 0, LFSRLEN - 1);
-            shiftRegister[LFSRLEN - 1] = w;
-        }
+//        for (int i = 0; i < steps; i++) {
+//            w = shiftRegister[15] ^ shiftRegister[4] ^ (shiftRegister[0] << 8) ^ theMultab[(shiftRegister[0] >>> 24) & 0xff];
+//            System.arraycopy(shiftRegister, 1, shiftRegister, 0, LFSRLEN - 1);
+//            shiftRegister[LFSRLEN - 1] = w;
+//        }
     }
 
-    /**
-     * Performs a reversible transformation of a word, based on the S-boxes.
-     * The reversibility isn't used, but it guarantees no loss of information,
-     * and hence no equivalent keys or IVs.
-     */
-    private static int fixedS(int w) {
-        int b;
-
-        b = theSBox[getByte(w, 0)];
-        w = ((w ^ theQBox[b]) & 0x00ffffff) | (b << 24);
-
-        b = theSBox[getByte(w, 1)];
-        w = ((w ^ leftRotateWord(theQBox[b], 8)) & 0xff00ffff) | (b << 16);
-
-        b = theSBox[getByte(w, 2)];
-        w = ((w ^ leftRotateWord(theQBox[b], 16)) & 0xffff00ff) | (b << 8);
-
-        b = theSBox[getByte(w, 3)];
-        w = ((w ^ leftRotateWord(theQBox[b], 24)) & 0xffffff00) | b;
-
-        return w;
-    }
-
-    /*
-     * Pushes a word through the keyed S-boxes.
-     * As the bytes bounce around the permutation table, they are used
-     * to build up words from the Qbox entries. Then the byte position
-     * corresponding to the input byte is replaced with the result of
-     * the S-box, which is a permutation of the input and guarantees
-     * a balanced function.
-     * Also added a rotation of the input word, to combat a differential
-     * trail allowed by the PHT.
-     */
-    private int s(int w, int r) {
-        int i;
-
-        Arrays.fill(sWordArray, 0);
-        w = leftRotateWord(w, r);
-        word2ByteArray(w, sByteArray, 0);
-
-        for (i = 0; i < keylen; ++i) {
-            sByteArray[0] = (byte) theSBox[getByte(mixedKey[i], 0) ^ (sByteArray[0] & 0xff)];
-            sWordArray[0] ^= leftRotateWord(theQBox[sByteArray[0] & 0xff], i);
-
-            sByteArray[1] = (byte) theSBox[getByte(mixedKey[i], 1) ^ (sByteArray[1] & 0xff)];
-            sWordArray[1] ^= leftRotateWord(theQBox[sByteArray[1] & 0xff], i + 8);
-
-            sByteArray[2] = (byte) theSBox[getByte(mixedKey[i], 2) ^ (sByteArray[2] & 0xff)];
-            sWordArray[2] ^= leftRotateWord(theQBox[sByteArray[2] & 0xff], i + 16);
-
-            sByteArray[3] = (byte) theSBox[getByte(mixedKey[i], 3) ^ (sByteArray[3] & 0xff)];
-            sWordArray[3] ^= leftRotateWord(theQBox[sByteArray[3] & 0xff], i + 24);
-        }
-
-        w = (sWordArray[0] & 0x00ffffff) | ((sByteArray[0] & 0xff) << 24);
-        w ^= (sWordArray[1] & 0xff00ffff) | ((sByteArray[1] & 0xff) << 16);
-        w ^= (sWordArray[2] & 0xffff00ff) | ((sByteArray[2] & 0xff) << 8);
-        w ^= (sWordArray[3] & 0xffffff00) | (sByteArray[3] & 0xff);
-
-        return w;
+    private static int offset(int zero, int i) {
+        return (zero + i) % LFSRLEN;
     }
 
     /**
@@ -159,6 +143,49 @@ class TuringReferenceImp {
             mixedKey[keylen++] = fixedS(byteArray2Word(key, i));
         }
         mixWords(mixedKey, keylen);
+
+        buildSBoxTables();
+    }
+
+    private void buildSBoxTables() {
+        int i;
+
+        for (int j = 0; j < 256; ++j) {
+            int w = 0;
+            int k = j;
+            for (i = 0; i < keylen; ++i) {
+                k = theSBox[getByte(mixedKey[i], 0) ^ k];
+                w ^= leftRotateWord(theQBox[k], i + 0);
+            }
+            s0[j] = (w & 0x00FFFFFF) | (k << 24);
+        }
+        for (int j = 0; j < 256; ++j) {
+            int w = 0;
+            int k = j;
+            for (i = 0; i < keylen; ++i) {
+                k = theSBox[getByte(mixedKey[i], 1) ^ k];
+                w ^= leftRotateWord(theQBox[k], i + 8);
+            }
+            s1[j] = (w & 0xFF00FFFF) | (k << 16);
+        }
+        for (int j = 0; j < 256; ++j) {
+            int w = 0;
+            int k = j;
+            for (i = 0; i < keylen; ++i) {
+                k = theSBox[getByte(mixedKey[i], 2) ^ k];
+                w ^= leftRotateWord(theQBox[k], i + 16);
+            }
+            s2[j] = (w & 0xFFFF00FF) | (k << 8);
+        }
+        for (int j = 0; j < 256; ++j) {
+            int w = 0;
+            int k = j;
+            for (i = 0; i < keylen; ++i) {
+                k = theSBox[getByte(mixedKey[i], 3) ^ k];
+                w ^= leftRotateWord(theQBox[k], i + 24);
+            }
+            s3[j] = (w & 0xFFFFFF00) | k;
+        }
     }
 
     /**
@@ -200,6 +227,72 @@ class TuringReferenceImp {
     }
 
     /**
+     * Performs a reversible transformation of a word, based on the S-boxes.
+     * The reversibility isn't used, but it guarantees no loss of information,
+     * and hence no equivalent keys or IVs.
+     */
+    private static int fixedS(int w) {
+        int b;
+
+        b = theSBox[getByte(w, 0)];
+        w = ((w ^ theQBox[b]) & 0x00ffffff) | (b << 24);
+
+        b = theSBox[getByte(w, 1)];
+        w = ((w ^ leftRotateWord(theQBox[b], 8)) & 0xff00ffff) | (b << 16);
+
+        b = theSBox[getByte(w, 2)];
+        w = ((w ^ leftRotateWord(theQBox[b], 16)) & 0xffff00ff) | (b << 8);
+
+        b = theSBox[getByte(w, 3)];
+        w = ((w ^ leftRotateWord(theQBox[b], 24)) & 0xffffff00) | b;
+
+        return w;
+    }
+
+    /*
+     * Pushes a word through the keyed S-boxes.
+     * As the bytes bounce around the permutation table, they are used
+     * to build up words from the Qbox entries. Then the byte position
+     * corresponding to the input byte is replaced with the result of
+     * the S-box, which is a permutation of the input and guarantees
+     * a balanced function.
+     * Also added a rotation of the input word, to combat a differential
+     * trail allowed by the PHT.
+     */
+    private int s(int w, int r) {
+        return (s0[getByte(w, (0 + r) & 0x3)]
+                ^ s1[getByte(w, (1 + r) & 0x3)]
+                ^ s2[getByte(w, (2 + r) & 0x3)]
+                ^ s3[getByte(w, (3 + r) & 0x3)]);
+//        int i;
+//
+//        Arrays.fill(sWordArray, 0);
+//        w = leftRotateWord(w, r);
+//        word2ByteArray(w, sByteArray, 0);
+//
+//        for (i = 0; i < keylen; ++i) {
+//            sByteArray[0] = (byte) theSBox[getByte(mixedKey[i], 0) ^ (sByteArray[0] & 0xff)];
+//            sWordArray[0] ^= leftRotateWord(theQBox[sByteArray[0] & 0xff], i);
+//
+//            sByteArray[1] = (byte) theSBox[getByte(mixedKey[i], 1) ^ (sByteArray[1] & 0xff)];
+//            sWordArray[1] ^= leftRotateWord(theQBox[sByteArray[1] & 0xff], i + 8);
+//
+//            sByteArray[2] = (byte) theSBox[getByte(mixedKey[i], 2) ^ (sByteArray[2] & 0xff)];
+//            sWordArray[2] ^= leftRotateWord(theQBox[sByteArray[2] & 0xff], i + 16);
+//
+//            sByteArray[3] = (byte) theSBox[getByte(mixedKey[i], 3) ^ (sByteArray[3] & 0xff)];
+//            sWordArray[3] ^= leftRotateWord(theQBox[sByteArray[3] & 0xff], i + 24);
+//        }
+//
+//        w = (sWordArray[0] & 0x00ffffff) | ((sByteArray[0] & 0xff) << 24);
+//        w ^= (sWordArray[1] & 0xff00ffff) | ((sByteArray[1] & 0xff) << 16);
+//        w ^= (sWordArray[2] & 0xffff00ff) | ((sByteArray[2] & 0xff) << 8);
+//        w ^= (sWordArray[3] & 0xffffff00) | (sByteArray[3] & 0xff);
+//
+//        return w;
+    }
+
+    /**
      * General word-wide n-PHT (Pseudo-Hadamard Transform)
      */
     static private void mixWords(int[] w, int n) {
@@ -217,12 +310,34 @@ class TuringReferenceImp {
         }
     }
 
+    /**
+     * Generate a 340-byte buffer of cipher data.
+     * Return the number of bytes generated
+     */
     public int turingGen(byte[] buf) {
-        int bytesGenerated;
-        for (bytesGenerated = 0; bytesGenerated < MAXSTREAM; ) {
-            bytesGenerated += turingGenRound(buf, bytesGenerated);
+        if (buf.length < MAXSTREAM) {
+            throw new IllegalArgumentException("Buffer is too small");
         }
-        return bytesGenerated;
+
+        turingGenRound(0, buf, 0);
+        turingGenRound(5, buf, 20);
+        turingGenRound(10, buf, 40);
+        turingGenRound(15, buf, 60);
+        turingGenRound(3, buf, 80);
+        turingGenRound(8, buf, 100);
+        turingGenRound(13, buf, 120);
+        turingGenRound(1, buf, 140);
+        turingGenRound(6, buf, 160);
+        turingGenRound(11, buf, 180);
+        turingGenRound(16, buf, 200);
+        turingGenRound(4, buf, 220);
+        turingGenRound(9, buf, 240);
+        turingGenRound(14, buf, 260);
+        turingGenRound(2, buf, 280);
+        turingGenRound(7, buf, 300);
+        turingGenRound(12, buf, 320);
+
+        return MAXSTREAM;
     }
 
     /**
@@ -230,16 +345,16 @@ class TuringReferenceImp {
      * Buffering issues are outside the scope of this implementation.
      * Returns the number of bytes of stream generated.
      */
-    private int turingGenRound(byte[] buf, int offset) {
+    private int turingGenRound(int z, byte[] buf, int offset) {
         int a, b, c, d, e;
 
-        step(1);
+        step(z);
 
-        a = shiftRegister[16];
-        b = shiftRegister[13];
-        c = shiftRegister[6];
-        d = shiftRegister[1];
-        e = shiftRegister[0];
+        a = shiftRegister[offset(z + 1, 16)];
+        b = shiftRegister[offset(z + 1, 13)];
+        c = shiftRegister[offset(z + 1, 6)];
+        d = shiftRegister[offset(z + 1, 1)];
+        e = shiftRegister[offset(z + 1, 0)];
 
         // mix 5 words in place (variant PHT)
         e += a + b + c + d;
@@ -249,9 +364,9 @@ class TuringReferenceImp {
         d += e;
 
         a = s(a, 0);
-        b = s(b, 8);
-        c = s(c, 16);
-        d = s(d, 24);
+        b = s(b, 1);
+        c = s(c, 2);
+        d = s(d, 3);
         e = s(e, 0);
 
         // mix 5 words in place (variant PHT)
@@ -261,13 +376,15 @@ class TuringReferenceImp {
         c += e;
         d += e;
 
-        step(3);
+        step(z + 1);
+        step(z + 2);
+        step(z + 3);
 
-        a += shiftRegister[14];
-        b += shiftRegister[12];
-        c += shiftRegister[8];
-        d += shiftRegister[1];
-        e += shiftRegister[0];
+        a += shiftRegister[offset(z + 4, 14)];
+        b += shiftRegister[offset(z + 4, 12)];
+        c += shiftRegister[offset(z + 4, 8)];
+        d += shiftRegister[offset(z + 4, 1)];
+        e += shiftRegister[offset(z + 4, 0)];
 
         word2ByteArray(a, buf, offset);
         word2ByteArray(b, buf, offset + 4);
@@ -275,7 +392,7 @@ class TuringReferenceImp {
         word2ByteArray(d, buf, offset + 12);
         word2ByteArray(e, buf, offset + 16);
 
-        step(1);
+        step(z + 4);
 
         return OUTLEN;
     }
