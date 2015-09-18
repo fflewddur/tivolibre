@@ -32,7 +32,9 @@ class TransportStreamDecoder extends StreamDecoder {
     private int extraBufferSize;
     private long bytesWritten;
     private long resumeDecryptionAtByte;
+    private boolean decryptionPaused;
     private long nextResumeDecryptionByteOffset;
+    private long nextMaskByteOffset;
 
     private static final byte SYNC_BYTE_VALUE = 0x47;
     private static final int PACKETS_UNTIL_RESYNC = 4;
@@ -259,7 +261,16 @@ class TransportStreamDecoder extends StreamDecoder {
      * Tell each stream to stop decrypting packets until its key changes.
      */
     private void pauseDecryption() {
+        decryptionPaused = true;
         streams.forEach((id, stream) -> stream.pauseDecrypting());
+    }
+
+    private void resumeDecryption() {
+        decryptionPaused = false;
+        resumeDecryptionAtByte = 0;
+        nextResumeDecryptionByteOffset = 0;
+        nextMaskByteOffset = 0;
+        streams.forEach((id, stream) -> stream.resumeDecrypting());
     }
 
     private boolean processPmtPacket(TransportStreamPacket packet) {
@@ -391,11 +402,8 @@ class TransportStreamDecoder extends StreamDecoder {
 
         byte[] packetBytes = stream.processPacket(packet);
 
-        if (nextResumeDecryptionByteOffset > 0 && packetBytes.length + bytesWritten >= nextResumeDecryptionByteOffset + 3) {
-            // The DirectShow filter seems to do this; it's purpose is a mystery
-            int offset = (int) (nextResumeDecryptionByteOffset - bytesWritten);
-            nextResumeDecryptionByteOffset += 0x100000;
-            packetBytes[offset + 3] &= 0x3F;
+        if (decryptionPaused) {
+            maskBytes(packetBytes);
         }
 
         try {
@@ -408,10 +416,33 @@ class TransportStreamDecoder extends StreamDecoder {
         }
 
         if (resumeDecryptionAtByte > 0 && resumeDecryptionAtByte <= bytesWritten) {
-            TivoDecoder.logger.info(String.format("=== RESUMING DECRYPTION === (at 0x%x, bytesWritten = 0x%x)", resumeDecryptionAtByte, bytesWritten));
-            resumeDecryptionAtByte = 0;
-            nextResumeDecryptionByteOffset = 0;
-            streams.forEach((i, s) -> s.resumeDecrypting());
+            TivoDecoder.logger.info(String.format("Resuming decryption at 0x%x, bytesWritten = 0x%x",
+                            resumeDecryptionAtByte, bytesWritten)
+            );
+            resumeDecryption();
+        }
+    }
+
+    /**
+     * This is for binary compatibility with the TiVo DirectShow filter: it masks bytes are certain intervals
+     * after a loss of synchronization.
+     */
+    private void maskBytes(byte[] packetBytes) {
+        if (nextResumeDecryptionByteOffset > 0 && packetBytes.length + bytesWritten > nextResumeDecryptionByteOffset + 3) {
+            // The DirectShow filter seems to do this; it's purpose is a mystery
+            int offset = (int) (nextResumeDecryptionByteOffset - bytesWritten);
+            if (packetBytes[offset] == SYNC_BYTE_VALUE) {
+                TivoDecoder.logger.debug(String.format("Found a sync byte at 0x%x", nextResumeDecryptionByteOffset));
+                nextMaskByteOffset = nextResumeDecryptionByteOffset + TransportStream.FRAME_SIZE;
+            }
+            nextResumeDecryptionByteOffset += 0x100000;
+            packetBytes[offset + 3] &= 0x3F;
+        }
+        if (nextMaskByteOffset > 0 && packetBytes.length + bytesWritten > nextMaskByteOffset + 3) {
+            TivoDecoder.logger.debug(String.format("Masking byte at 0x%x", nextMaskByteOffset));
+            int offset = (int) (nextMaskByteOffset - bytesWritten);
+            packetBytes[offset + 3] &= 0x3F;
+            nextMaskByteOffset = 0;
         }
     }
 }
