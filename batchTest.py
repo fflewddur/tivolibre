@@ -34,6 +34,7 @@ class bcolors:
 class BatchTester:
     args = None
     jarPath = None
+    filesTested = 0
 
     def run(self):
         self.args = self.parseArgs()
@@ -100,8 +101,9 @@ class BatchTester:
         return not name.startswith('.') and name.endswith(self.args.sourceExtension)
 
     def decodeFile(self, inputPath):
+        self.filesTested += 1
         outputPath = inputPath.replace(self.args.sourceExtension, self.args.ourExtension)
-        print(bcolors.OKBLUE + "Testing {}{}".format(inputPath, bcolors.ENDC))
+        print(bcolors.OKBLUE + "Test #{}: {}{}".format(self.filesTested, inputPath, bcolors.ENDC))
         if (os.path.isfile(outputPath)):
             print("Deleting existing output file...")
             os.remove(outputPath)
