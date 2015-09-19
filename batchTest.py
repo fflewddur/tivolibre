@@ -103,7 +103,7 @@ class BatchTester:
     def decodeFile(self, inputPath):
         self.filesTested += 1
         outputPath = inputPath.replace(self.args.sourceExtension, self.args.ourExtension)
-        print(bcolors.OKBLUE + "Test #{}: {}{}".format(self.filesTested, inputPath, bcolors.ENDC))
+        print(bcolors.OKBLUE + "Test #{:,d}: {}{}".format(self.filesTested, inputPath, bcolors.ENDC))
         if (os.path.isfile(outputPath)):
             print("Deleting existing output file...")
             os.remove(outputPath)
@@ -128,13 +128,19 @@ class BatchTester:
 
     def printResults(self, perfectFiles, filesWithDifferences):
         if perfectFiles:
-            print("\nPerfectly decoded files:" + bcolors.OKGREEN)
+            plural = ''
+            if len(perfectFiles) > 1:
+                plural = 's'
+            print("\nPerfectly decoded {:,d} file{}:{}".format(len(perfectFiles), plural, bcolors.OKGREEN))
             for filePath in perfectFiles:
                 print("\t{}".format(filePath))
             print(bcolors.ENDC)
 
         if filesWithDifferences:
-            print("Shit to fix:" + bcolors.FAIL)
+            plural = ''
+            if len(filesWithDifferences) > 1:
+                plural = 's'
+            print("Need to fix {:,d} file{}:{}".format(len(filesWithDifferences), plural, bcolors.FAIL))
             for filePath in filesWithDifferences:
                 print("\t{}".format(filePath))
             print(bcolors.ENDC)
