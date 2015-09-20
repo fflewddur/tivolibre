@@ -64,9 +64,9 @@ class TuringDecoder {
         byte[] shortenedKey = new byte[SHORTENED_KEY_LENGTH];
         System.arraycopy(key, 0, shortenedKey, 0, SHORTENED_KEY_LENGTH);
         byte[] turkey = DigestUtils.sha1(shortenedKey);
-//        System.out.println("prepareFrameHelper(): turkey=" + DigestUtils.sha1Hex(shortenedKey));
+//        TivoDecoder.logger.debug("prepareFrameHelper(): turkey={}", DigestUtils.sha1Hex(shortenedKey));
         byte[] turiv = DigestUtils.sha1(key);
-//        System.out.println("prepareFrameHelper(): turiv=" + DigestUtils.sha1Hex(key));
+//        TivoDecoder.logger.debug("prepareFrameHelper(): turiv={}", DigestUtils.sha1Hex(key));
 
         stream.reset(streamId, blockId, turkey, turiv);
     }

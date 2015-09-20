@@ -274,7 +274,7 @@ class TransportStreamPacket {
         }
     }
 
-    private static class Header {
+    static class Header {
         private int length;
         private int sync;
         private boolean hasTransportError;
@@ -325,9 +325,9 @@ class TransportStreamPacket {
             return isPayloadStart;
         }
 
-//        public boolean isPriority() {
-//            return isPriority;
-//        }
+        public boolean isPriority() {
+            return isPriority;
+        }
 
         public int getPID() {
             return pid;

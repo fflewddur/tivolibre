@@ -22,8 +22,9 @@
 
 package net.straylightlabs.tivolibre;
 
-import java.util.Arrays;
 import net.straylightlabs.quickturing.QuickTuring;
+
+import java.util.Arrays;
 
 class TuringStream {
     private int streamId;

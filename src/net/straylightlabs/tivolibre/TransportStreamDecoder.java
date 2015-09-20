@@ -55,7 +55,7 @@ class TransportStreamDecoder extends StreamDecoder {
             while (true) {
                 fillBuffer();
 
-//                if (bytesWritten > 0x2f4) {
+//                if (bytesWritten > 756) {
 //                    return false;
 //                }
 
@@ -117,7 +117,7 @@ class TransportStreamDecoder extends StreamDecoder {
 
                 decryptAndWritePacket(packet);
                 if (TivoDecoder.logger.isDebugEnabled() && packetCounter % 100000 == 0) {
-//                if (bytesWritten > 0) {
+//                if (bytesWritten > 400) {
                     TivoDecoder.logger.debug(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
                                     packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
                     );
@@ -420,15 +420,17 @@ class TransportStreamDecoder extends StreamDecoder {
     }
 
     /**
-     * This is for binary compatibility with the TiVo DirectShow filter: it masks bytes are certain intervals
-     * after a loss of synchronization.
+     * This is for binary compatibility with the TiVo DirectShow filter: it masks bytes at certain intervals
+     * after a loss of synchronization. The exact rules TiVo uses for this masking are unknown; this is a best
+     * guess based on the output of their DirectShow filter.
      */
     private void maskBytes(byte[] packetBytes) {
         if (nextResumeDecryptionByteOffset > 0 && packetBytes.length + bytesWritten > nextResumeDecryptionByteOffset + 3) {
-            // The DirectShow filter seems to do this; it's purpose is a mystery
             int offset = (int) (nextResumeDecryptionByteOffset - bytesWritten);
-            if (packetBytes[offset] == SYNC_BYTE_VALUE) {
-                TivoDecoder.logger.debug(String.format("Found a sync byte at 0x%x, masking next frame", nextResumeDecryptionByteOffset));
+            int headerBits = intFromByteArray(packetBytes, offset);
+            TransportStreamPacket.Header header = new TransportStreamPacket.Header(headerBits);
+            if (header.isValid() && !header.isPriority()) {
+                TivoDecoder.logger.debug(String.format("Found a valid TS header at 0x%x, pid=0x%04x, checking next frame", nextResumeDecryptionByteOffset, header.getPID()));
                 nextMaskByteOffset = nextResumeDecryptionByteOffset + TransportStream.FRAME_SIZE;
             }
             nextResumeDecryptionByteOffset += 0x100000;
@@ -438,14 +440,20 @@ class TransportStreamDecoder extends StreamDecoder {
             TivoDecoder.logger.debug(String.format("Masking byte at 0x%x", nextMaskByteOffset));
             int offset = (int) (nextMaskByteOffset - bytesWritten);
             packetBytes[offset + 3] &= 0x3F;
-            nextMaskByteOffset = 0;
-            if (packetBytes[offset] == SYNC_BYTE_VALUE) {
-                TivoDecoder.logger.debug(String.format("Found a sync byte at 0x%x, masking next frame", nextMaskByteOffset));
+
+            int headerBits = intFromByteArray(packetBytes, offset);
+            TransportStreamPacket.Header header = new TransportStreamPacket.Header(headerBits);
+            if (header.isValid() && !header.isPriority()) {
                 nextMaskByteOffset += TransportStream.FRAME_SIZE;
             } else {
                 nextMaskByteOffset = 0;
             }
         }
+    }
+
+    int intFromByteArray(byte[] bytes, int offset) {
+        return bytes[offset] << 24 | (bytes[offset + 1] & 0xFF) << 16 |
+                (bytes[offset + 2] & 0xFF) << 8 | (bytes[offset + 3] & 0xFF);
     }
 
     private void writePacketBytes(byte[] packetBytes) {

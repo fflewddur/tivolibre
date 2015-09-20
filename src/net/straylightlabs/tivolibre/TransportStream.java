@@ -164,10 +164,12 @@ class TransportStream extends Stream {
         int encryptedLength = encryptedData.length - packet.getPesHeaderOffset();
         byte[] data = new byte[encryptedLength];
         System.arraycopy(encryptedData, packet.getPesHeaderOffset(), data, 0, encryptedLength);
+//        TivoDecoder.logger.debug("Data to decrypt:\n{}", TivoDecoder.bytesToHexString(data));
         if (!decryptBuffer(data)) {
             TivoDecoder.logger.error("Decrypting packet failed");
             throw new RuntimeException("Decrypting packet failed");
         }
+//        TivoDecoder.logger.debug("Decrypted data:\n{}", TivoDecoder.bytesToHexString(data));
         return packet.getScrambledBytes(data);
     }
 
