@@ -26,8 +26,16 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import org.apache.commons.cli.*;
 import org.slf4j.LoggerFactory;
+import org.w3c.dom.Document;
 
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 import java.io.*;
+import java.util.prefs.Preferences;
 
 /**
  * Simple driver application for command line use.
@@ -35,6 +43,8 @@ import java.io.*;
 public class DecoderApp {
     private Options options;
     private CommandLine cli;
+
+    private static final String PREF_MAK = "mak";
 
     public static void main(String args[]) {
         DecoderApp app = new DecoderApp();
@@ -78,10 +88,16 @@ public class DecoderApp {
             root.setLevel(Level.ERROR);
         }
 
+        String mak = loadMak();
         if (!cli.hasOption('m')) {
-            System.err.format("Error: You must provide your media access key%n");
-            showUsage();
-            System.exit(1);
+            if (mak == null) {
+                System.err.format("Error: You must provide your media access key%n");
+                showUsage();
+                System.exit(1);
+            }
+        } else {
+            mak = cli.getOptionValue('m');
+            saveMak(mak);
         }
 
         try {
@@ -98,7 +114,7 @@ public class DecoderApp {
                 } else {
                     outputStream = System.out;
                 }
-                decode(inputStream, outputStream, cli.getOptionValue('m'));
+                decode(inputStream, outputStream, mak);
             } catch (FileNotFoundException e) {
                 TivoDecoder.logger.error("Input file {} not found: {}", cli.getOptionValue('i'), e.getLocalizedMessage());
             } finally {
@@ -126,7 +142,18 @@ public class DecoderApp {
             if (output != System.out) {
                 System.out.println(TivoDecoder.QUALCOMM_MSG);
             }
-            decoder.decode();
+
+            boolean decodeSuccessful;
+            if (cli.hasOption('x')) {
+                decodeSuccessful = decoder.decodeMetadata();
+            } else {
+                decodeSuccessful = decoder.decode();
+            }
+
+            if (decodeSuccessful && cli.hasOption('D')) {
+                dumpMetadata(decoder);
+            }
+
         } catch (FileNotFoundException e) {
             TivoDecoder.logger.error("Error: {}", e.getLocalizedMessage());
         } catch (IOException e) {
@@ -137,9 +164,11 @@ public class DecoderApp {
     private Options buildCliOptions() {
         Options options = new Options();
 
-        options.addOption("d", "debug", false, "Show debugging information");
+        options.addOption("D", "metadata", false, "Dump TiVo recording metadata to XML files");
+        options.addOption("d", "debug", false, "Show debugging information while decoding");
         options.addOption("h", "help", false, "Show this help message and exit");
         options.addOption("v", "version", false, "Show version and exit");
+        options.addOption("x", "no-video", false, "Exit after processing metadata; doesn't decode the video");
         Option option = Option.builder("o").argName("FILENAME").longOpt("output").hasArg().
                 desc("Output file (defaults to standard output)").build();
         options.addOption(option);
@@ -147,9 +176,51 @@ public class DecoderApp {
                 desc("File to decode (defaults to standard input)").build();
         options.addOption(option);
         option = Option.builder("m").argName("MAK").longOpt("mak").hasArg().
-                desc("Your media access key (REQUIRED)").build();
+                desc("Your media access key (will be saved between program executions)").build();
         options.addOption(option);
 
         return options;
+    }
+
+    private void dumpMetadata(TivoDecoder decoder) {
+        int counter = 0;
+        for (Document d : decoder.getMetadata()) {
+            String chunkFilename = String.format("chunk-%02d.xml", counter++);
+            TivoDecoder.logger.debug("Saving metadata chunk {} to {}...", counter, chunkFilename);
+            try {
+                OutputStream out = new FileOutputStream(chunkFilename);
+                printDocument(d, out);
+            } catch (IOException | TransformerException e) {
+                TivoDecoder.logger.error("Error saving file {}: ", chunkFilename, e);
+            }
+        }
+    }
+
+    // From http://stackoverflow.com/questions/2325388/java-shortest-way-to-pretty-print-to-stdout-a-org-w3c-dom-document
+    private static void printDocument(Document doc, OutputStream out) throws IOException, TransformerException {
+        TransformerFactory tf = TransformerFactory.newInstance();
+        Transformer transformer = tf.newTransformer();
+        transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "no");
+        transformer.setOutputProperty(OutputKeys.METHOD, "xml");
+        transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+        transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
+        transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "4");
+
+        transformer.transform(new DOMSource(doc),
+                new StreamResult(new OutputStreamWriter(out, "UTF-8")));
+    }
+
+    private void saveMak(String mak) {
+        Preferences prefs = getPrefs();
+        prefs.put(PREF_MAK, mak);
+    }
+
+    private String loadMak() {
+        Preferences prefs = getPrefs();
+        return prefs.get(PREF_MAK, null);
+    }
+
+    private Preferences getPrefs() {
+        return Preferences.userNodeForPackage(DecoderApp.class);
     }
 }

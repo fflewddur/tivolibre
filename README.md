@@ -11,12 +11,14 @@ You can use TivoLibre as a stand-alone command-line app. By default, it will rea
 
     java -jar tivo-libre.jar -i input.TiVo -o output.mpg -m 0123456789
 
+Your media access key will be saved between program executions, so you only need to specify it the first time you run TivoLibre.
+
 To view the full list of options, use the -h command-line parameter:
 
     java -jar tivo-libre.jar -h
 
 # API Usage
-The tivo-libre.jar file exposes the TivoDecoder class. TivoDecoder requires an InputStream, an OutputStream, and a String representing the MAK associated with the InputStream. Call the decode() method to start the coding process; decode() is a blocking method that returns true on success and false on failure.
+The tivo-libre.jar file exposes the TivoDecoder class. TivoDecoder requires an InputStream, an OutputStream, and a String representing the MAK associated with the InputStream. Call the `decode()` method to start the coding process; `decode()` is a blocking method that returns `true` on success and `false` on failure.
 
     // Assume @in and @out are Path objects and @mak is a String
     try (BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(in.toFile()));
@@ -28,6 +30,8 @@ The tivo-libre.jar file exposes the TivoDecoder class. TivoDecoder requires an I
     } catch (IOException e) {
         TivoDecoder.logger.severe(String.format("Error reading/writing files: %s", e.getLocalizedMessage()));
     }
+
+The TivoDecoder class also includes methods for fetching the metadata embedded in a TiVo file (`List<Document> getMetadata()`) and for processing a file's metadata without also decoding its audio and video streams (`boolean decodeMetadata()`).
 
 TivoLibre can be configured to use your app's existing logging framework via the SLF4J logging facade.
 

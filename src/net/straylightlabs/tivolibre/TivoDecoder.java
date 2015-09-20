@@ -24,23 +24,25 @@ package net.straylightlabs.tivolibre;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.w3c.dom.Document;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.List;
 
 /**
  * Decodes a TiVo file to a standard MPEG file.
- * Currently only supports TiVo Transport Stream files.
  */
 public class TivoDecoder {
     private final InputStream inputStream;
     private final OutputStream outputStream;
     private final String mak;
+    private TivoStream tivoStream;
 
     public final static Logger logger;
 
     public final static String QUALCOMM_MSG = "Encryption by QUALCOMM";
-    public final static String VERSION = "0.6.1";
+    public final static String VERSION = "0.6.1.1";
 
     static {
         logger = LoggerFactory.getLogger(TivoDecoder.class.toString());
@@ -52,10 +54,31 @@ public class TivoDecoder {
         this.mak = mak;
     }
 
+    /**
+     * Decode the specified @inputStream with @mak, printing the results to @outputStream.
+     */
     public boolean decode() {
-        logger.info(QUALCOMM_MSG);
-        TivoStream stream = new TivoStream(inputStream, outputStream, mak);
-        return stream.process();
+        tivoStream = new TivoStream(inputStream, outputStream, mak);
+        return tivoStream.process();
+    }
+
+    /**
+     * Decode only the metadata from @inputStream. Prints nothing to @outputStream.
+     */
+    public boolean decodeMetadata() {
+        tivoStream = new TivoStream(inputStream, outputStream, mak);
+        tivoStream.setProcessVideo(false);
+        return tivoStream.process();
+    }
+
+    /**
+     * Return a list of XML Documents representing the recording metadata for the processed TiVo file.
+     */
+    public List<Document> getMetadata() {
+        if (tivoStream == null) {
+            throw new IllegalStateException("Cannot call getMetadata() before processing a TivoStream");
+        }
+        return tivoStream.getMetadata();
     }
 
     public static String bytesToHexString(byte[] bytes, int offset, int length) {
