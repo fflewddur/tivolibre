@@ -81,7 +81,6 @@ public class DecoderApp {
         }
 
         Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
-
         if (cli.hasOption('d')) {
             root.setLevel(Level.DEBUG);
         } else {
