@@ -163,6 +163,7 @@ class TivoStream {
         return sb.toString();
     }
 
+    @SuppressWarnings("unused")
     public void printChunkPayloads() {
         StringBuilder sb = new StringBuilder();
 

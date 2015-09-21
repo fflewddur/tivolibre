@@ -89,6 +89,7 @@ class TuringStream {
                 '}';
     }
 
+    @SuppressWarnings("unused")
     public void dumpCipherData() {
         StringBuilder sb = new StringBuilder();
         int bytesPerBlock = 1;

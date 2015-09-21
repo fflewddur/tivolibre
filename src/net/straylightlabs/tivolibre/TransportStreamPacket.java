@@ -216,9 +216,10 @@ class TransportStreamPacket {
         isPmt = val;
     }
 
-//    public boolean isPmt() {
-//        return isPmt;
-//    }
+    @SuppressWarnings("unused")
+    public boolean isPmt() {
+        return isPmt;
+    }
 
     public void setIsTivo(boolean val) {
         isTivo = val;
@@ -228,6 +229,7 @@ class TransportStreamPacket {
         return isTivo;
     }
 
+    @SuppressWarnings("unused")
     public String dump() {
         return TivoDecoder.bytesToHexString(buffer.array());
     }

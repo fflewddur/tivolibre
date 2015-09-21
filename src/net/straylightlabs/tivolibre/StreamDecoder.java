@@ -137,6 +137,7 @@ abstract class StreamDecoder {
         private int lastSectionNumber;
         private int programMapPid;
 
+        @SuppressWarnings("unused")
         public int getVersionNumber() {
             return versionNumber;
         }
@@ -145,14 +146,17 @@ abstract class StreamDecoder {
             this.versionNumber = versionNumber;
         }
 
+        @SuppressWarnings("unused")
         public int getCurrentNextIndicator() {
             return currentNextIndicator;
         }
 
+        @SuppressWarnings("unused")
         public void setCurrentNextIndicator(int currentNextIndicator) {
             this.currentNextIndicator = currentNextIndicator;
         }
 
+        @SuppressWarnings("unused")
         public int getSectionNumber() {
             return sectionNumber;
         }
@@ -161,6 +165,7 @@ abstract class StreamDecoder {
             this.sectionNumber = sectionNumber;
         }
 
+        @SuppressWarnings("unused")
         public int getLastSectionNumber() {
             return lastSectionNumber;
         }
