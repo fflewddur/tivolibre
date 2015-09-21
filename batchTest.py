@@ -109,7 +109,7 @@ class BatchTester:
             os.remove(outputPath)
         print("Decoding to {}...".format(outputPath))
         subprocess.run(['java', '-jar', self.jarPath, '-m', self.args.mak, '-i', inputPath,
-                        '-o', outputPath])
+                        '-o', outputPath, '--compat-mode'])
         referencePath = outputPath.replace(self.args.ourExtension, self.args.refExtension)
         print("Comparing output to reference file {}...".format(referencePath))
         result = subprocess.run(['diff', outputPath, referencePath])

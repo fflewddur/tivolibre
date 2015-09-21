@@ -26,9 +26,7 @@ import java.io.IOException;
 
 class TivoStreamHeader {
     private char[] fileType;
-    private int dummy04;
     private int dummy06;
-    private int dummy08;
     private int mpegOffset;
     private int numChunks;
     private final CountingDataInputStream input;
@@ -52,11 +50,11 @@ class TivoStreamHeader {
                 fileType[i] = (char) b;
             }
             // Next two bytes are a mystery
-            dummy04 = input.readUnsignedShort();
+            input.readUnsignedShort();
             // Next two bytes tell us about the file's providence
             dummy06 = input.readUnsignedShort();
             // Next two bytes also remain a mystery
-            dummy08 = input.readUnsignedShort();
+            input.readUnsignedShort();
             // Next four bytes are an unsigned int representing where the read MPEG data begins
             mpegOffset = input.readInt();
             // Next two bytes tell us how many TiVo-specific chunks of data are coming
@@ -83,18 +81,11 @@ class TivoStreamHeader {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-
-        sb.append("[TiVo Header");
-        sb.append(String.format(" fileType=%s (%02X:%02X:%02X:%02X)",
-                new String(fileType), (int) fileType[0], (int) fileType[1], (int) fileType[2], (int) fileType[3]));
-        sb.append(String.format(" dummy04=%04X", dummy04));
-        sb.append(String.format(" dummy06=%04X", dummy06));
-        sb.append(String.format(" dummy08=%04X", dummy08));
-        sb.append(String.format(" mpegOffset=%d", mpegOffset));
-        sb.append(String.format(" numChunks=%d", numChunks));
-        sb.append("]");
-
-        return sb.toString();
+        return "TivoStreamHeader{" +
+                String.format(" fileType=%s (%02X:%02X:%02X:%02X)",
+                        new String(fileType), (int) fileType[0], (int) fileType[1], (int) fileType[2], (int) fileType[3]) +
+                ", mpegOffset=" + mpegOffset +
+                ", numChunks=" + numChunks +
+                '}';
     }
 }

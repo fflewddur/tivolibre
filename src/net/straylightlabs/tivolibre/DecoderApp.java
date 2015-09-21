@@ -59,7 +59,7 @@ public class DecoderApp {
             CommandLineParser parser = new DefaultParser();
             cli = parser.parse(options, args);
         } catch (ParseException e) {
-            TivoDecoder.logger.error("Parsing command line options failed: ", e);
+            TivoDecoder.logger.error("Parsing command line options failed: {}", e.getLocalizedMessage());
             showUsage();
             return false;
         }
@@ -87,16 +87,31 @@ public class DecoderApp {
             root.setLevel(Level.ERROR);
         }
 
-        String mak = loadMak();
+        DecoderOptions decoderOptions = new DecoderOptions();
+
+        decoderOptions.mak = loadMak();
         if (!cli.hasOption('m')) {
-            if (mak == null) {
+            if (decoderOptions.mak == null) {
                 System.err.format("Error: You must provide your media access key%n");
                 showUsage();
                 System.exit(1);
             }
         } else {
-            mak = cli.getOptionValue('m');
-            saveMak(mak);
+            decoderOptions.mak = cli.getOptionValue('m');
+            saveMak(decoderOptions.mak);
+        }
+
+        if (cli.hasOption("compat-mode")) {
+            TivoDecoder.logger.debug("Running in compatibility mode");
+            decoderOptions.compatibilityMode = true;
+        }
+
+        if (cli.hasOption('D')) {
+            decoderOptions.dumpMetadata = true;
+        }
+
+        if (cli.hasOption('x')) {
+            decoderOptions.noVideo = true;
         }
 
         try {
@@ -113,7 +128,7 @@ public class DecoderApp {
                 } else {
                     outputStream = System.out;
                 }
-                decode(inputStream, outputStream, mak);
+                decode(inputStream, outputStream, decoderOptions);
             } catch (FileNotFoundException e) {
                 TivoDecoder.logger.error("Input file {} not found: {}", cli.getOptionValue('i'), e.getLocalizedMessage());
             } finally {
@@ -134,22 +149,26 @@ public class DecoderApp {
         formatter.printHelp("java -jar tivo-libre.jar -i input.TiVo -o output.mpg -m 0123456789", options);
     }
 
-    private void decode(InputStream input, OutputStream output, String mak) {
+    private void decode(InputStream input, OutputStream output, DecoderOptions options) {
         try (BufferedInputStream inputStream = new BufferedInputStream(input);
              BufferedOutputStream outputStream = new BufferedOutputStream(output)) {
-            TivoDecoder decoder = new TivoDecoder(inputStream, outputStream, mak);
+            TivoDecoder decoder = new TivoDecoder.Builder()
+                    .input(inputStream).output(outputStream)
+                    .mak(options.mak).compatibilityMode(options.compatibilityMode)
+                    .build();
+
             if (output != System.out) {
                 System.out.println(TivoDecoder.QUALCOMM_MSG);
             }
 
             boolean decodeSuccessful;
-            if (cli.hasOption('x')) {
+            if (options.noVideo) {
                 decodeSuccessful = decoder.decodeMetadata();
             } else {
                 decodeSuccessful = decoder.decode();
             }
 
-            if (decodeSuccessful && cli.hasOption('D')) {
+            if (decodeSuccessful && options.dumpMetadata) {
                 dumpMetadata(decoder);
             }
 
@@ -168,7 +187,10 @@ public class DecoderApp {
         options.addOption("h", "help", false, "Show this help message and exit");
         options.addOption("v", "version", false, "Show version and exit");
         options.addOption("x", "no-video", false, "Exit after processing metadata; doesn't decode the video");
-        Option option = Option.builder("o").argName("FILENAME").longOpt("output").hasArg().
+        Option option = Option.builder().longOpt("compat-mode").desc("Don't fix problems in the TiVo file; produces output that " +
+                "is binary compatible with the TiVo DirectShow filter").build();
+        options.addOption(option);
+        option = Option.builder("o").argName("FILENAME").longOpt("output").hasArg().
                 desc("Output file (defaults to standard output)").build();
         options.addOption(option);
         option = Option.builder("i").argName("FILENAME").longOpt("input").hasArg().
@@ -221,5 +243,12 @@ public class DecoderApp {
 
     private Preferences getPrefs() {
         return Preferences.userNodeForPackage(DecoderApp.class);
+    }
+
+    private static class DecoderOptions {
+        String mak;
+        boolean compatibilityMode;
+        boolean noVideo;
+        boolean dumpMetadata;
     }
 }

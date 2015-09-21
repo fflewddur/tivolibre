@@ -110,16 +110,11 @@ class TivoStreamChunk {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-
-        sb.append("([TiVo Chunk");
-        sb.append(String.format(" chunkSize=%d", chunkSize));
-        sb.append(String.format(" dataSize=%d", dataSize));
-        sb.append(String.format(" id=%d", id));
-        sb.append(String.format(" type=%s", type));
-        sb.append("]");
-
-        return sb.toString();
+        return "TivoStreamChunk{" +
+                "chunkSize=" + chunkSize +
+                ", id=" + id +
+                ", type=" + type +
+                '}';
     }
 
     public String getDataString() {

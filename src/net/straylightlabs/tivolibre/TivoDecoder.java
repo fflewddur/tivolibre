@@ -37,6 +37,7 @@ public class TivoDecoder {
     private final InputStream inputStream;
     private final OutputStream outputStream;
     private final String mak;
+    private final boolean compatibilityMode;
     private TivoStream tivoStream;
 
     public final static Logger logger;
@@ -48,10 +49,22 @@ public class TivoDecoder {
         logger = LoggerFactory.getLogger(TivoDecoder.class.toString());
     }
 
+    private TivoDecoder(InputStream inputStream, OutputStream outputStream, String mak, boolean compatibilityMode) {
+        this.inputStream = inputStream;
+        this.outputStream = outputStream;
+        this.mak = mak;
+        this.compatibilityMode = compatibilityMode;
+    }
+
+    /**
+     * DEPRECATED: Use the TivoDecoder.Builder class to create TivoDecoder objects.
+     */
+    @Deprecated
     public TivoDecoder(InputStream inputStream, OutputStream outputStream, String mak) {
         this.inputStream = inputStream;
         this.outputStream = outputStream;
         this.mak = mak;
+        this.compatibilityMode = false;
     }
 
     /**
@@ -59,6 +72,7 @@ public class TivoDecoder {
      */
     public boolean decode() {
         tivoStream = new TivoStream(inputStream, outputStream, mak);
+        tivoStream.setCompatibilityMode(compatibilityMode);
         return tivoStream.process();
     }
 
@@ -67,6 +81,7 @@ public class TivoDecoder {
      */
     public boolean decodeMetadata() {
         tivoStream = new TivoStream(inputStream, outputStream, mak);
+        tivoStream.setCompatibilityMode(compatibilityMode);
         tivoStream.setProcessVideo(false);
         return tivoStream.process();
     }
@@ -97,5 +112,55 @@ public class TivoDecoder {
 
     public static String bytesToHexString(byte[] bytes) {
         return bytesToHexString(bytes, 0, bytes.length);
+    }
+
+    /**
+     * Class for building TivoDecoder objects.
+     */
+    public static class Builder {
+        private InputStream inputStream;
+        private OutputStream outputStream;
+        private String mak;
+        private boolean compatibilityMode;
+
+        public Builder input(InputStream is) {
+            inputStream = is;
+            return this;
+        }
+
+        public Builder output(OutputStream os) {
+            outputStream = os;
+            return this;
+        }
+
+        public Builder mak(String mak) {
+            this.mak = mak;
+            return this;
+        }
+
+        public Builder compatibilityMode(boolean val) {
+            compatibilityMode = val;
+            return this;
+        }
+
+        /**
+         * Builds a new TivoDecoder instance from the list of given parameters.
+         */
+        public TivoDecoder build() {
+            verifyInternalState();
+            return new TivoDecoder(inputStream, outputStream, mak, compatibilityMode);
+        }
+
+        private void verifyInternalState() {
+            if (inputStream == null) {
+                throw new IllegalStateException("Cannot build a TivoDecoder without an InputStream");
+            }
+            if (outputStream == null) {
+                throw new IllegalStateException("Cannot build a TivoDecoder without an OutputStream");
+            }
+            if (mak == null) {
+                throw new IllegalStateException("Cannot build a TivoDecoder without a MAK");
+            }
+        }
     }
 }
