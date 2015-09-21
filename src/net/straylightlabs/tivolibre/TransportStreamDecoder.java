@@ -35,15 +35,17 @@ class TransportStreamDecoder extends StreamDecoder {
     private boolean decryptionPaused;
     private long nextResumeDecryptionByteOffset;
     private long nextMaskByteOffset;
+    private final boolean compatibilityMode;
 
     private static final byte SYNC_BYTE_VALUE = 0x47;
     private static final int PACKETS_UNTIL_RESYNC = 4;
     private static final int DECRYPTION_PAUSED_INTERVAL = 0x100000;
 
     public TransportStreamDecoder(TuringDecoder decoder, int mpegOffset, CountingDataInputStream inputStream,
-                                  OutputStream outputStream) {
+                                  OutputStream outputStream, boolean compatibilityMode) {
         super(decoder, mpegOffset, inputStream, outputStream);
         inputBuffer = ByteBuffer.allocate(TransportStream.FRAME_SIZE);
+        this.compatibilityMode = compatibilityMode;
     }
 
     @Override
@@ -107,8 +109,11 @@ class TransportStreamDecoder extends StreamDecoder {
                         break;
                     case NULL:
                         // These packets are for maintaining a constant bit-rate; just copy them through to the output.
-                        // TODO drop these packets unless in compatibility mode
                         TivoDecoder.logger.debug("NULL packet");
+                        if (!compatibilityMode) {
+                            bytesWritten += packet.getBytes().length;
+                            continue;
+                        }
                         break;
                     default:
                         TivoDecoder.logger.warn("Unsupported packet type: {}", packet.getPacketType());
@@ -240,9 +245,7 @@ class TransportStreamDecoder extends StreamDecoder {
      */
     private void outputUnsynchronizedBytes(int offset, int length, boolean maskThirdByte) throws IOException {
         // The TiVo DirectShow filter includes these bytes in the output, so we will, too.
-        // TODO drop these bytes unless in compatibility mode
-        TivoDecoder.logger.debug(String.format("Writing unsynchronized bytes from %d to %d (0x%x to 0x%x)%noffset = %d, length = %d",
-                bytesWritten, bytesWritten + length, bytesWritten, bytesWritten + length, offset, length));
+
         byte[] bytes = inputBuffer.array();
         if (maskThirdByte && length >= 3) {
             // The DirectShow filter seems to do this; it's purpose is a mystery
@@ -252,7 +255,14 @@ class TransportStreamDecoder extends StreamDecoder {
             bytes[offset + (int) (nextResumeDecryptionByteOffset - bytesWritten) + 3] &= 0x3F;
             nextResumeDecryptionByteOffset += 0x100000;
         }
-        outputStream.write(inputBuffer.array(), offset, length);
+        if (compatibilityMode) {
+            TivoDecoder.logger.debug(String.format(
+                            "Writing unsynchronized bytes from %d to %d (0x%x to 0x%x)%noffset = %d, length = %d",
+                            bytesWritten, bytesWritten + length, bytesWritten, bytesWritten + length, offset, length)
+            );
+            outputStream.write(inputBuffer.array(), offset, length);
+        }
+        // Pretend we wrote the extra bytes; we use this offset to determine when to resume decryption
         bytesWritten += length;
     }
 
@@ -390,16 +400,17 @@ class TransportStreamDecoder extends StreamDecoder {
 
     private void decryptAndWritePacket(TransportStreamPacket packet) {
         TransportStream stream = getPacketStream(packet);
+
         byte[] packetBytes = stream.processPacket(packet);
 
         if (decryptionPaused) {
             maskBytes(packetBytes);
         }
 
-        writePacketBytes(packetBytes);
+        writePacketBytes(packetBytes, stream.getType());
 
         if (resumeDecryptionAtByte > 0 && resumeDecryptionAtByte <= bytesWritten) {
-            TivoDecoder.logger.info(String.format("Resuming decryption at 0x%x, bytesWritten = 0x%x",
+            TivoDecoder.logger.error(String.format("Resuming decryption at 0x%x, bytesWritten = 0x%x",
                             resumeDecryptionAtByte, bytesWritten)
             );
             resumeDecryption();
@@ -409,11 +420,10 @@ class TransportStreamDecoder extends StreamDecoder {
     private TransportStream getPacketStream(TransportStreamPacket packet) {
         TransportStream stream = streams.get(packet.getPID());
         if (stream == null) {
-            // TODO drop these packets unless in compatibility mode
             TivoDecoder.logger.warn(String.format("No TransportStream exists with PID 0x%04x, creating one",
                             packet.getPID())
             );
-            stream = new TransportStream(turingDecoder);
+            stream = new TransportStream(turingDecoder, TransportStream.StreamType.NOT_IN_PMT);
             streams.put(packet.getPID(), stream);
         }
         return stream;
@@ -456,10 +466,11 @@ class TransportStreamDecoder extends StreamDecoder {
                 (bytes[offset + 2] & 0xFF) << 8 | (bytes[offset + 3] & 0xFF);
     }
 
-    private void writePacketBytes(byte[] packetBytes) {
+    private void writePacketBytes(byte[] packetBytes, TransportStream.StreamType type) {
         try {
-            // TODO Drop any packets while decryption is paused, unless in compatibility mode
-            outputStream.write(packetBytes);
+            if ((!decryptionPaused && type != TransportStream.StreamType.NOT_IN_PMT) || compatibilityMode) {
+                outputStream.write(packetBytes);
+            }
             bytesWritten += packetBytes.length;
         } catch (Exception e) {
             TivoDecoder.logger.error("Error writing file: ", e);

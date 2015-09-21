@@ -178,6 +178,7 @@ class TransportStream extends Stream {
         VIDEO,
         PRIVATE_DATA,
         OTHER,
+        NOT_IN_PMT,
         NONE;
 
         private static Map<Integer, StreamType> typeMap;
@@ -221,6 +222,9 @@ class TransportStream extends Stream {
             typeMap.put(0x7f, OTHER);
 
             typeMap.put(0x97, PRIVATE_DATA);
+
+            // Allow us to track packet streams that weren't in the PMT
+            typeMap.put(0xffff, NOT_IN_PMT);
 
             typeMap.put(0x00, NONE);
         }

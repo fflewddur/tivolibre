@@ -121,7 +121,8 @@ class TivoStream {
                 streamDecoder = new ProgramStreamDecoder(decoder, header.getMpegOffset(), dataInputStream, outputStream);
                 break;
             case TRANSPORT_STREAM:
-                streamDecoder = new TransportStreamDecoder(decoder, header.getMpegOffset(), dataInputStream, outputStream);
+                streamDecoder = new TransportStreamDecoder(decoder, header.getMpegOffset(), dataInputStream,
+                        outputStream, compatibilityMode);
                 break;
             default:
                 TivoDecoder.logger.error("Error: unknown file format.");
