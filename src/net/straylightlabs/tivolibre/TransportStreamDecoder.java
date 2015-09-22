@@ -407,10 +407,10 @@ class TransportStreamDecoder extends StreamDecoder {
             maskBytes(packetBytes);
         }
 
-        writePacketBytes(packetBytes, stream.getType());
+        writePacketBytes(packetBytes);
 
         if (resumeDecryptionAtByte > 0 && resumeDecryptionAtByte <= bytesWritten) {
-            TivoDecoder.logger.error(String.format("Resuming decryption at 0x%x, bytesWritten = 0x%x",
+            TivoDecoder.logger.warn(String.format("Resuming decryption at 0x%x, bytesWritten = 0x%x",
                             resumeDecryptionAtByte, bytesWritten)
             );
             resumeDecryption();
@@ -466,9 +466,9 @@ class TransportStreamDecoder extends StreamDecoder {
                 (bytes[offset + 2] & 0xFF) << 8 | (bytes[offset + 3] & 0xFF);
     }
 
-    private void writePacketBytes(byte[] packetBytes, TransportStream.StreamType type) {
+    private void writePacketBytes(byte[] packetBytes) {
         try {
-            if ((!decryptionPaused && type != TransportStream.StreamType.NOT_IN_PMT) || compatibilityMode) {
+            if (!decryptionPaused || compatibilityMode) {
                 outputStream.write(packetBytes);
             }
             bytesWritten += packetBytes.length;

@@ -149,12 +149,14 @@ class TransportStream extends Stream {
     }
 
     public boolean decryptBuffer(byte[] buffer) {
-        if (!doHeader()) {
-            TivoDecoder.logger.error("Problem parsing Turing header");
+        if (doHeader()) {
+            // Only decrypt the buffer if the stream's key has been set
+            TuringStream turingStream = turingDecoder.prepareFrame(streamId, turingBlockNumber);
+            turingDecoder.decryptBytes(turingStream, buffer);
+        } else {
             return false;
         }
-        TuringStream turingStream = turingDecoder.prepareFrame(streamId, turingBlockNumber);
-        turingDecoder.decryptBytes(turingStream, buffer);
+
         return true;
     }
 
@@ -166,8 +168,7 @@ class TransportStream extends Stream {
         System.arraycopy(encryptedData, packet.getPesHeaderOffset(), data, 0, encryptedLength);
 //        TivoDecoder.logger.debug("Data to decrypt:\n{}", TivoDecoder.bytesToHexString(data));
         if (!decryptBuffer(data)) {
-            TivoDecoder.logger.error("Decrypting packet failed");
-            throw new RuntimeException("Decrypting packet failed");
+            TivoDecoder.logger.error(String.format("Decrypting packet in stream 0x%04x failed", packet.getPID()));
         }
 //        TivoDecoder.logger.debug("Decrypted data:\n{}", TivoDecoder.bytesToHexString(data));
         return packet.getScrambledBytes(data);
