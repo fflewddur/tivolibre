@@ -1,8 +1,6 @@
 # TivoLibre
 TivoLibre is a Java library for decoding TiVo files to standard MPEG files. It supports both TiVo Transport Stream and TiVo Program Stream files.
 
-TivoLibre is based on TivoDecode 0.4.4.
-
 # Downloading
 The latest release can always be found at https://github.com/fflewddur/tivolibre/releases.
 
@@ -44,3 +42,7 @@ When used as a library, TivoLibre only requires commons-codec-1.9.jar (or higher
 
 # Known Issues
 A list of known problems is available at https://github.com/fflewddur/tivolibre/issues. You can help us improve TivoLibre by reporting any problems you encounter.
+
+# Acknowledgements
+
+TivoLibre is based on TivoDecode 0.4.4 and uses the Turing encryption algorithm, which was developed by QUALCOMM. Testing TivoLibre has been greatly helped by members of the TiVo Community Forum (http://www.tivocommunity.com/), especially forum member moyekj.
