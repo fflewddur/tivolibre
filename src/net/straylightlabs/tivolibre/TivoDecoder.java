@@ -71,6 +71,7 @@ public class TivoDecoder {
      * Decode the specified @inputStream with @mak, printing the results to @outputStream.
      */
     public boolean decode() {
+        verifyInternalState();
         tivoStream = new TivoStream(inputStream, outputStream, mak);
         tivoStream.setCompatibilityMode(compatibilityMode);
         return tivoStream.process();
@@ -80,10 +81,19 @@ public class TivoDecoder {
      * Decode only the metadata from @inputStream. Prints nothing to @outputStream.
      */
     public boolean decodeMetadata() {
-        tivoStream = new TivoStream(inputStream, outputStream, mak);
+        tivoStream = new TivoStream(inputStream, null, mak);
         tivoStream.setCompatibilityMode(compatibilityMode);
         tivoStream.setProcessVideo(false);
         return tivoStream.process();
+    }
+
+    /**
+     * Most of this is already handled by Builder, but we need to ensure @outputStream exists for non-metadata processing.
+     */
+    private void verifyInternalState() {
+        if (outputStream == null) {
+            throw new IllegalStateException("Cannot decode a video without an OutputStream");
+        }
     }
 
     /**
@@ -154,9 +164,6 @@ public class TivoDecoder {
         private void verifyInternalState() {
             if (inputStream == null) {
                 throw new IllegalStateException("Cannot build a TivoDecoder without an InputStream");
-            }
-            if (outputStream == null) {
-                throw new IllegalStateException("Cannot build a TivoDecoder without an OutputStream");
             }
             if (mak == null) {
                 throw new IllegalStateException("Cannot build a TivoDecoder without a MAK");

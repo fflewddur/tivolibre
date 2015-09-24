@@ -45,4 +45,4 @@ A list of known problems is available at https://github.com/fflewddur/tivolibre/
 
 # Acknowledgements
 
-TivoLibre is based on TivoDecode 0.4.4 and uses the Turing encryption algorithm, which was developed by QUALCOMM. Testing TivoLibre has been greatly helped by members of the TiVo Community Forum (http://www.tivocommunity.com/), especially forum member moyekj.
+TivoLibre is based on TivoDecode 0.4.4 and uses the Turing encryption algorithm, which was developed by QUALCOMM. Testing TivoLibre has been greatly helped by members of the TiVo Community Forum (http://www.tivocommunity.com/), especially forum member *moyekj*.
