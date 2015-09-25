@@ -229,6 +229,10 @@ class TransportStreamPacket {
         return isTivo;
     }
 
+    public Header getHeader() {
+        return header;
+    }
+
     @SuppressWarnings("unused")
     public String dump() {
         return TivoDecoder.bytesToHexString(buffer.array());
@@ -343,17 +347,20 @@ class TransportStreamPacket {
             return isScrambled;
         }
 
-//        public boolean hasAdaptationField() {
-//            return hasAdaptationField;
-//        }
+        @SuppressWarnings("unused")
+        public boolean hasAdaptationField() {
+            return hasAdaptationField;
+        }
 
-//        public boolean hasPayloadData() {
-//            return hasPayloadData;
-//        }
+        @SuppressWarnings("unused")
+        public boolean hasPayloadData() {
+            return hasPayloadData;
+        }
 
-//        public int getCounter() {
-//            return counter;
-//        }
+        @SuppressWarnings("unused")
+        public int getCounter() {
+            return counter;
+        }
 
         @Override
         public String toString() {
@@ -372,7 +379,7 @@ class TransportStreamPacket {
         }
     }
 
-    private static class AdaptationField {
+    static class AdaptationField {
         private boolean isDiscontinuity;
         private boolean isRandomAccess;
         private boolean isPriority;
@@ -401,9 +408,10 @@ class TransportStreamPacket {
             return isPrivate;
         }
 
-//        public boolean isDiscontinuity() {
-//            return isDiscontinuity;
-//        }
+        @SuppressWarnings("unused")
+        public boolean isDiscontinuity() {
+            return isDiscontinuity;
+        }
 
         @Override
         public String toString() {

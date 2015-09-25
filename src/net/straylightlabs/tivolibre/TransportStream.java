@@ -127,7 +127,12 @@ class TransportStream extends Stream {
         int payloadLength = packet.getPayloadLength();
         if (nextPacketPesOffset < payloadLength) {
             int packetPesOffset = nextPacketPesOffset;
-            int sumOfPesHeaderLengths = getPesHeaderLength() + packetPesOffset;
+            int sumOfPesHeaderLengths = packetPesOffset;
+            if (sumOfPesHeaderLengths > 0 || packet.isPayloadStart()) {
+                // Only get PES header length if we know this is a payload start, or our prior header extended into it
+                sumOfPesHeaderLengths += getPesHeaderLength();
+            }
+
             if (sumOfPesHeaderLengths <= pesBuffer.limit()) {
                 // PES headers end in this packet
                 packet.setPesHeaderOffset(sumOfPesHeaderLengths);

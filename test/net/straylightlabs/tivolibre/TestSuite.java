@@ -26,6 +26,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
 @RunWith(Suite.class)
-@Suite.SuiteClasses({TivoDecoderTest.class})
+@Suite.SuiteClasses({TivoDecoderTest.class, TransportStreamPacketTest.class})
 public class TestSuite {
 }

@@ -28,6 +28,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
@@ -38,12 +39,14 @@ import static org.junit.Assert.assertTrue;
 /**
  * Test class for TivoDecoder.
  *
- * Expects two JVM properties:
+ * Expects three JVM properties:
  * - testFile=pathToTiVoFile
+ * - outFile=pathForOutputFile
  * - mak=makForTestFile
  */
 public class TivoDecoderTest {
     private InputStream inputStream;
+    private OutputStream outputStream;
     private String mak;
 
     @Before
@@ -56,6 +59,15 @@ public class TivoDecoderTest {
             TivoDecoder.logger.error("IOException opening inputStream '{}': ", filename, e);
         }
         assertNotNull(inputStream);
+
+        filename = System.getProperty("outFile");
+        assertNotNull(filename);
+        try {
+            outputStream = Files.newOutputStream(Paths.get(filename), StandardOpenOption.CREATE);
+        } catch (IOException e) {
+            TivoDecoder.logger.error("IOException opening outputStream '{}': ", filename, e);
+        }
+        assertNotNull(outputStream);
 
         mak = System.getProperty("mak");
         assertNotNull(mak);
@@ -104,6 +116,20 @@ public class TivoDecoderTest {
     @Test(expected = IllegalStateException.class)
     public void testDecoderProcessingWithoutOutput() {
         TivoDecoder decoder = new TivoDecoder.Builder().input(inputStream).mak(mak).build();
+        assertNotNull(decoder);
+        assertTrue(decoder.decode());
+    }
+
+    @Test
+    public void testDecoderProcessing() {
+        TivoDecoder decoder = new TivoDecoder.Builder().input(inputStream).output(outputStream).mak(mak).build();
+        assertNotNull(decoder);
+        assertTrue(decoder.decode());
+    }
+
+    @Test
+    public void testDecoderProcessingWithCompatMode() {
+        TivoDecoder decoder = new TivoDecoder.Builder().input(inputStream).output(outputStream).mak(mak).compatibilityMode(true).build();
         assertNotNull(decoder);
         assertTrue(decoder.decode());
     }

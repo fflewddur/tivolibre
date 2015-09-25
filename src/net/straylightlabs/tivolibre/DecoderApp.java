@@ -157,10 +157,6 @@ public class DecoderApp {
                     .mak(options.mak).compatibilityMode(options.compatibilityMode)
                     .build();
 
-            if (output != System.out) {
-                System.out.println(TivoDecoder.QUALCOMM_MSG);
-            }
-
             boolean decodeSuccessful;
             if (options.noVideo) {
                 decodeSuccessful = decoder.decodeMetadata();

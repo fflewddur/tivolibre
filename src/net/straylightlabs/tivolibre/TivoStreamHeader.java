@@ -84,7 +84,7 @@ class TivoStreamHeader {
         return "TivoStreamHeader{" +
                 String.format(" fileType=%s (%02X:%02X:%02X:%02X)",
                         new String(fileType), (int) fileType[0], (int) fileType[1], (int) fileType[2], (int) fileType[3]) +
-                ", mpegOffset=" + mpegOffset +
+                String.format(", mpegOffset=0x%x", mpegOffset) +
                 ", numChunks=" + numChunks +
                 '}';
     }

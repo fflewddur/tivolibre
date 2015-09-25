@@ -57,7 +57,7 @@ class TransportStreamDecoder extends StreamDecoder {
             while (true) {
                 fillBuffer();
 
-//                if (bytesWritten > 756) {
+//                if (bytesWritten > 0xd52649e0L) {
 //                    return false;
 //                }
 
@@ -122,11 +122,11 @@ class TransportStreamDecoder extends StreamDecoder {
 
                 decryptAndWritePacket(packet);
                 if (TivoDecoder.logger.isDebugEnabled() && packetCounter % 100000 == 0) {
-//                if (bytesWritten > 400) {
+//                if (bytesWritten > 0xd52639e0L) {
                     TivoDecoder.logger.debug(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
                                     packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
                     );
-                    TivoDecoder.logger.debug("{}", packet);
+//                    TivoDecoder.logger.debug("{}", packet);
 //                    TivoDecoder.logger.debug("Packet data:\n" + packet.dump());
                 }
             }
@@ -453,7 +453,7 @@ class TransportStreamDecoder extends StreamDecoder {
 
             int headerBits = intFromByteArray(packetBytes, offset);
             TransportStreamPacket.Header header = new TransportStreamPacket.Header(headerBits);
-            if (header.isValid() && !header.isPriority()) {
+            if (header.isValid()) {
                 nextMaskByteOffset += TransportStream.FRAME_SIZE;
             } else {
                 nextMaskByteOffset = 0;
