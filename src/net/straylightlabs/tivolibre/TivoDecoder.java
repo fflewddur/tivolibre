@@ -28,6 +28,7 @@ import org.w3c.dom.Document;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -105,6 +106,20 @@ public class TivoDecoder {
         }
         return tivoStream.getMetadata();
     }
+
+    /**
+     * Save the TiVo file's metadata in PyTivo's format.
+     * @param path
+     */
+    public void saveMetadata(Path path) {
+        if (tivoStream == null) {
+            throw new IllegalStateException("Cannot call saveMetadata() before processing a TivoStream");
+        }
+        PyTivoMetadata metadata = PyTivoMetadata.createFromMetadata(getMetadata());
+        metadata.writeToFile(path);
+    }
+
+
 
     public static String bytesToHexString(byte[] bytes, int offset, int length) {
         StringBuilder sb = new StringBuilder();

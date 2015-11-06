@@ -35,6 +35,8 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.*;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.prefs.Preferences;
 
 /**
@@ -110,6 +112,10 @@ public class DecoderApp {
             decoderOptions.dumpMetadata = true;
         }
 
+        if (cli.hasOption('p')) {
+            decoderOptions.pytivoMetadata = true;
+        }
+
         if (cli.hasOption('x')) {
             decoderOptions.noVideo = true;
         }
@@ -125,8 +131,10 @@ public class DecoderApp {
                 }
                 if (cli.hasOption('o')) {
                     outputStream = new FileOutputStream(cli.getOptionValue('o'));
+                    decoderOptions.pytivoMetadataPath = appendToPath(Paths.get(cli.getOptionValue('o')), ".txt");
                 } else {
                     outputStream = System.out;
+                    decoderOptions.pytivoMetadataPath = Paths.get("pytivo.txt");
                 }
                 decode(inputStream, outputStream, decoderOptions);
             } catch (FileNotFoundException e) {
@@ -142,6 +150,12 @@ public class DecoderApp {
         } catch (IOException e) {
             TivoDecoder.logger.error("IOException: {}", e.getLocalizedMessage(), e);
         }
+    }
+
+    private Path appendToPath(Path path, String suffix) {
+        Path dir = path.getParent();
+        Path file = path.getFileName();
+        return Paths.get(dir.toString(), file.toString() + suffix);
     }
 
     private void showUsage() {
@@ -167,6 +181,9 @@ public class DecoderApp {
             if (decodeSuccessful && options.dumpMetadata) {
                 dumpMetadata(decoder);
             }
+            if (decodeSuccessful && options.pytivoMetadata) {
+                dumpPytivoMetadata(decoder, options.pytivoMetadataPath);
+            }
 
         } catch (FileNotFoundException e) {
             TivoDecoder.logger.error("Error: {}", e.getLocalizedMessage());
@@ -181,6 +198,7 @@ public class DecoderApp {
         options.addOption("D", "metadata", false, "Dump TiVo recording metadata to XML files");
         options.addOption("d", "debug", false, "Show debugging information while decoding");
         options.addOption("h", "help", false, "Show this help message and exit");
+        options.addOption("p", "pytivo", false, "Dump TiVo recording metadata in pyTivo format");
         options.addOption("v", "version", false, "Show version and exit");
         options.addOption("x", "no-video", false, "Exit after processing metadata; doesn't decode the video");
         Option option = Option.builder().longOpt("compat-mode").desc("Don't fix problems in the TiVo file; produces output that " +
@@ -211,6 +229,10 @@ public class DecoderApp {
                 TivoDecoder.logger.error("Error saving file {}: ", chunkFilename, e);
             }
         }
+    }
+
+    private void dumpPytivoMetadata(TivoDecoder decoder, Path metadataPath) {
+        decoder.saveMetadata(metadataPath);
     }
 
     // From http://stackoverflow.com/questions/2325388/java-shortest-way-to-pretty-print-to-stdout-a-org-w3c-dom-document
@@ -246,5 +268,7 @@ public class DecoderApp {
         boolean compatibilityMode;
         boolean noVideo;
         boolean dumpMetadata;
+        boolean pytivoMetadata;
+        Path pytivoMetadataPath;
     }
 }
