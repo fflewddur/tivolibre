@@ -100,10 +100,8 @@ public class PyTivoMetadata {
     }
 
     private static boolean parseShowingNode(Node element, Builder builder) {
-        logger.info("parseShowingNode()");
         boolean foundUniqueId = false;
         for (Node node = element.getFirstChild(); node != null; node = node.getNextSibling()) {
-            logger.debug("node name = {}", node.getNodeName());
             if (nodeEquals(node, "showingBits")) {
                 int showingBits = Integer.parseInt(node.getAttributes().getNamedItem("value").getNodeValue());
                 builder.addShowingBits(showingBits);
@@ -120,10 +118,8 @@ public class PyTivoMetadata {
     }
 
     private static boolean parseProgramNode(Node program, Builder builder) {
-        logger.info("parseProgramNode()");
         boolean foundUniqueId = false;
         for (Node node = program.getFirstChild(); node != null; node = node.getNextSibling()) {
-            logger.debug("program node name = {}", node.getNodeName());
             if (nodeEquals(node, "showingBits")) {
                 int showingBits = Integer.parseInt(node.getAttributes().getNamedItem("value").getNodeValue());
                 builder.addShowingBits(showingBits);
@@ -189,7 +185,6 @@ public class PyTivoMetadata {
     private static boolean parseSeriesNode(Node series, Builder builder) {
         boolean foundUniqueId = false;
         for (Node node = series.getFirstChild(); node != null; node = node.getNextSibling()) {
-            logger.debug("series node name = {}", node.getNodeName());
             if (nodeEquals(node, "seriesTitle")) {
                 builder.seriesTitle(node.getTextContent());
             } else if (nodeEquals(node, "uniqueId")) {
