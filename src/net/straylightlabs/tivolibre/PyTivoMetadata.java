@@ -45,6 +45,7 @@ public class PyTivoMetadata {
     private final ZonedDateTime originalAirDate;
     private final int movieYear;
     private final String title;
+    private final String seriesTitle;
     private final String episodeTitle;
     private final String description;
     private final boolean isEpisode;
@@ -53,8 +54,8 @@ public class PyTivoMetadata {
     private final int channelNumber;
     private final String channelCallSign;
     private final int showingBits;
-    private final String tvRating;
-    private final String starRating;
+    private final int tvRating;
+    private final int starRating;
     private final String mpaaRating;
     private final int colorCode;
     private final List<String> programGenres;
@@ -76,7 +77,7 @@ public class PyTivoMetadata {
 
         boolean foundElement = false;
         for (Document doc : xmlDocs) {
-            NodeList showings = doc.getElementsByTagName("vActualShowing");
+            NodeList showings = doc.getElementsByTagName("showing");
             if (showings == null || foundElement) {
                 continue;
             }
@@ -84,12 +85,8 @@ public class PyTivoMetadata {
             builder = new Builder();
             for (int i = 0; i < showings.getLength() && !foundElement; i++) {
                 Node node = showings.item(i);
-                if (node.getNodeName().equals("vActualShowing")) {
-                    for (Node child = node.getFirstChild(); child != null; child = child.getNextSibling()) {
-                        if (child.getNodeName().equals("element")) {
-                            foundElement = parseElementNode(child, builder);
-                        }
-                    }
+                if (nodeEquals(node, "showing")) {
+                    foundElement |= parseShowingNode(node, builder);
                 }
             }
         }
@@ -97,17 +94,24 @@ public class PyTivoMetadata {
         return builder.build();
     }
 
-    private static boolean parseElementNode(Node element, Builder builder) {
-        logger.info("parseElementNode()");
+    private static boolean nodeEquals(Node node, String name) {
+        return node.getNodeName().equalsIgnoreCase(name);
+    }
+
+    private static boolean parseShowingNode(Node element, Builder builder) {
+        logger.info("parseShowingNode()");
         boolean foundUniqueId = false;
         for (Node node = element.getFirstChild(); node != null; node = node.getNextSibling()) {
             logger.debug("node name = {}", node.getNodeName());
-            if (node.getNodeName().equals("showingBits")) {
+            if (nodeEquals(node, "showingBits")) {
                 int showingBits = Integer.parseInt(node.getAttributes().getNamedItem("value").getNodeValue());
                 builder.addShowingBits(showingBits);
-            } else if (node.getNodeName().equals("time")) {
+            } else if (nodeEquals(node, "time")) {
                 builder.airDate(node.getTextContent());
-            } else if (node.getNodeName().equals("program")) {
+            } else if (nodeEquals(node, "tvRating")) {
+                int rating = Integer.parseInt(node.getAttributes().getNamedItem("value").getNodeValue());
+                builder.tvRating(rating);
+            } else if (nodeEquals(node, "program")) {
                 foundUniqueId = parseProgramNode(node, builder);
             }
         }
@@ -119,33 +123,72 @@ public class PyTivoMetadata {
         boolean foundUniqueId = false;
         for (Node node = program.getFirstChild(); node != null; node = node.getNextSibling()) {
             logger.debug("program node name = {}", node.getNodeName());
-            if (node.getNodeName().equals("showingBits")) {
+            if (nodeEquals(node, "showingBits")) {
                 int showingBits = Integer.parseInt(node.getAttributes().getNamedItem("value").getNodeValue());
                 builder.addShowingBits(showingBits);
-            } else if (node.getNodeName().equals("originalAirDate")) {
+            } else if (nodeEquals(node, "originalAirDate")) {
                 builder.originalAirDate(node.getTextContent());
-            } else if (node.getNodeName().equals("title")) {
+            } else if (nodeEquals(node, "title")) {
                 builder.title(node.getTextContent());
-            } else if (node.getNodeName().equals("isEpisode")) {
+            } else if (nodeEquals(node, "isEpisode")) {
                 builder.isEpisode(node.getTextContent());
-            } else if (node.getNodeName().equals("colorCode")) {
+            } else if (nodeEquals(node, "episodeNumber")) {
+                builder.episodeNumber(node.getTextContent());
+            } else if (nodeEquals(node, "episodeTitle")) {
+                builder.episodeTitle(node.getTextContent());
+            } else if (nodeEquals(node, "movieYear")) {
+                builder.movieYear(node.getTextContent());
+            } else if (nodeEquals(node, "starRating")) {
+                builder.starRating(node.getAttributes().getNamedItem("value").getNodeValue());
+            } else if (nodeEquals(node, "colorCode")) {
                 builder.colorCode(node.getAttributes().getNamedItem("value").getNodeValue());
-            } else if (node.getNodeName().equals("uniqueId")) {
+            } else if (nodeEquals(node, "description")) {
+                builder.description(node.getTextContent());
+            } else if (nodeEquals(node, "uniqueId")) {
                 foundUniqueId = true;
-            } else if (node.getNodeName().equals("series")) {
+            } else if (nodeEquals(node, "series")) {
                 foundUniqueId |= parseSeriesNode(node, builder);
+            } else if (nodeEquals(node, "vActor")) {
+                parseListNode(node, builder.actors);
+            } else if (nodeEquals(node, "vChoreographer")) {
+                parseListNode(node, builder.choreographers);
+            } else if (nodeEquals(node, "vDirector")) {
+                parseListNode(node, builder.directors);
+            } else if (nodeEquals(node, "vExecProducer")) {
+                parseListNode(node, builder.execProducers);
+            } else if (nodeEquals(node, "vProgramGenre")) {
+                parseListNode(node, builder.programGenres);
+            } else if (nodeEquals(node, "vGuestStar")) {
+                parseListNode(node, builder.guestStars);
+            } else if (nodeEquals(node, "vHost")) {
+                parseListNode(node, builder.hosts);
+            } else if (nodeEquals(node, "vProducer")) {
+                parseListNode(node, builder.producers);
+            } else if (nodeEquals(node, "vWriter")) {
+                parseListNode(node, builder.writers);
             }
         }
         return foundUniqueId;
+    }
+
+    private static void parseListNode(Node listNode, List<String> list) {
+        for (Node node = listNode.getFirstChild(); node != null; node = node.getNextSibling()) {
+            if (nodeEquals(node, "element")) {
+                String val = node.getTextContent().trim();
+                if (!val.isEmpty()) {
+                    list.add(node.getTextContent());
+                }
+            }
+        }
     }
 
     private static boolean parseSeriesNode(Node series, Builder builder) {
         boolean foundUniqueId = false;
         for (Node node = series.getFirstChild(); node != null; node = node.getNextSibling()) {
             logger.debug("series node name = {}", node.getNodeName());
-            if (node.getNodeName().equals("seriesTitle")) {
+            if (nodeEquals(node, "seriesTitle")) {
                 builder.seriesTitle(node.getTextContent());
-            } else if (node.getNodeName().equals("uniqueId")) {
+            } else if (nodeEquals(node, "uniqueId")) {
                 foundUniqueId = true;
                 builder.seriesId(node.getTextContent());
             }
@@ -157,11 +200,18 @@ public class PyTivoMetadata {
         airDate = builder.airDate;
         originalAirDate = builder.originalAirDate;
         movieYear = builder.movieYear;
-        if (builder.title != null) {
+        if (builder.seriesTitle != null && builder.episodeTitle != null) {
+            title = builder.seriesTitle + " - " + builder.episodeTitle;
+        } else if (builder.title != null) {
             title = builder.title;
-        } else {
+        } else if (builder.seriesTitle != null) {
             title = builder.seriesTitle;
+        } else if (builder.episodeTitle != null) {
+            title = builder.episodeTitle;
+        } else {
+            title = "Unknown";
         }
+        seriesTitle = builder.seriesTitle;
         episodeTitle = builder.episodeTitle;
         description = builder.description;
         isEpisode = builder.isEpisode;
@@ -189,18 +239,64 @@ public class PyTivoMetadata {
 
     public boolean writeToFile(Path filePath) {
         try (PrintWriter writer = new PrintWriter(Files.newBufferedWriter(filePath, StandardOpenOption.CREATE, StandardOpenOption.WRITE))) {
-            writer.format("title : %s%n", title);
-            writer.format("time : %s%n", airDate);
-            writer.format("showingBits : %d%n", showingBits);
-            writer.format("colorCode : x%d%n", colorCode);
-            writer.format("isEpisode : %b%n", isEpisode);
-            writer.format("originalAirDate : %s%n", originalAirDate);
+            writeString(writer, "title", title);
+            writeString(writer, "seriesTitle", seriesTitle);
+            writeString(writer, "episodeTitle", episodeTitle);
+            writeString(writer, "time", airDate);
+            writeString(writer, "originalAirDate", originalAirDate);
+            writeString(writer, "description", description);
+            writeString(writer, "isEpisode", isEpisode);
+            writeString(writer, "seriesId", seriesId);
+
+            writeInt(writer, "episodeNumber", episodeNumber);
+            writeInt(writer, "tvRating", tvRating, "x");
+            writeInt(writer, "starRating", starRating, "x");
+            writeInt(writer, "showingBits", showingBits);
+            writeInt(writer, "colorCode", colorCode, "x");
+            if (partCount > 0 && partIndex > 0) {
+                writeInt(writer, "partCount", partCount);
+                writeInt(writer, "partIndex", partIndex);
+            }
+            writeInt(writer, "movieYear", movieYear);
+
+            writeList(writer, "vActor", actors);
+            writeList(writer, "vProgramGenre", programGenres);
+            writeList(writer, "vDirector", directors);
+            writeList(writer, "vGuestStar", guestStars);
+            writeList(writer, "vExecProducer", execProducers);
+            writeList(writer, "vProducer", producers);
+            writeList(writer, "vWriter", writers);
+            writeList(writer, "vHost", hosts);
+            writeList(writer, "vChoreographer", choreographers);
+
         } catch (IOException e) {
             logger.error("Error writing to file '{}': ", filePath, e);
             return false;
         }
 
         return true;
+    }
+
+    private void writeString(PrintWriter writer, String field, Object val) {
+        if (val != null) {
+            writer.format("%s : %s%n", field, val);
+        }
+    }
+
+    private void writeInt(PrintWriter writer, String field, int val) {
+        writeInt(writer, field, val, "");
+    }
+
+    private void writeInt(PrintWriter writer, String field, int val, String prefix) {
+        if (val > 0) {
+            writer.format("%s : %s%d%n", field, prefix, val);
+        }
+    }
+
+    private void writeList(PrintWriter writer, String field, List<String> list) {
+        if (list.size() > 0) {
+            list.stream().forEach(e -> writer.format("%s : %s%n", field, e));
+        }
     }
 
     static class Builder {
@@ -217,8 +313,8 @@ public class PyTivoMetadata {
         private int channelNumber;
         private String channelCallSign;
         private int showingBits;
-        private String tvRating;
-        private String starRating;
+        private int tvRating;
+        private int starRating;
         private String mpaaRating;
         private int colorCode;
         private List<String> programGenres;
@@ -286,6 +382,36 @@ public class PyTivoMetadata {
 
         public Builder seriesTitle(String val) {
             seriesTitle = val;
+            return this;
+        }
+
+        public Builder description(String val) {
+            description = val;
+            return this;
+        }
+
+        public Builder episodeNumber(String val) {
+            episodeNumber = Integer.parseInt(val);
+            return this;
+        }
+
+        public Builder episodeTitle(String val) {
+            episodeTitle = val;
+            return this;
+        }
+
+        public Builder tvRating(int val) {
+            tvRating = val;
+            return this;
+        }
+
+        public Builder movieYear(String val) {
+            movieYear = Integer.parseInt(val);
+            return this;
+        }
+
+        public Builder starRating(String val) {
+            starRating = Integer.parseInt(val);
             return this;
         }
     }
