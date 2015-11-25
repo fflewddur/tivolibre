@@ -130,8 +130,9 @@ public class DecoderApp {
                     inputStream = System.in;
                 }
                 if (cli.hasOption('o')) {
-                    outputStream = new FileOutputStream(cli.getOptionValue('o'));
-                    decoderOptions.pytivoMetadataPath = appendToPath(Paths.get(cli.getOptionValue('o')), ".txt");
+                    String outputLocation = cli.getOptionValue('o');
+                    outputStream = new FileOutputStream(outputLocation);
+                    decoderOptions.pytivoMetadataPath = appendToPath(Paths.get(outputLocation), ".txt");
                 } else {
                     outputStream = System.out;
                     decoderOptions.pytivoMetadataPath = Paths.get("pytivo.txt");
@@ -153,9 +154,15 @@ public class DecoderApp {
     }
 
     private Path appendToPath(Path path, String suffix) {
+        assert(path != null);
         Path dir = path.getParent();
         Path file = path.getFileName();
-        return Paths.get(dir.toString(), file.toString() + suffix);
+        TivoDecoder.logger.info("dir = '{}', file = '{}'", dir, file);
+        if (dir != null) {
+            return Paths.get(dir.toString(), file.toString() + suffix);
+        } else {
+            return Paths.get(file.toString() + suffix);
+        }
     }
 
     private void showUsage() {
