@@ -93,7 +93,8 @@ class CountingDataInputStream implements AutoCloseable {
     public int skipBytes(int bytesToSkip) throws IOException {
         int totalBytesSkipped = 0;
         while (bytesToSkip > 0) {
-            int bytesSkipped = inputStream.skipBytes(bytesToSkip);
+            byte[] buffer = new byte[bytesToSkip];
+            int bytesSkipped  = inputStream.read(buffer, 0, bytesToSkip);
             if (bytesSkipped > 0) {
                 totalBytesSkipped += bytesSkipped;
                 bytesToSkip -= bytesSkipped;

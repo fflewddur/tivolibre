@@ -24,6 +24,10 @@ package net.straylightlabs.tivolibre;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
+import ch.qos.logback.core.ConsoleAppender;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.encoder.PatternLayoutEncoder;
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import org.apache.commons.cli.*;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
@@ -54,6 +58,31 @@ public class DecoderApp {
             app.run();
         }
     }
+    private static void buildLogger(Boolean debug) {
+        LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
+        lc.reset();
+        Logger logger = lc.getLogger(Logger.ROOT_LOGGER_NAME);
+        logger.detachAndStopAllAppenders();
+
+        PatternLayoutEncoder ple = new PatternLayoutEncoder();
+        ple.setPattern("%msg%n");
+        ple.setContext(lc);
+        ple.start();
+
+        ConsoleAppender<ILoggingEvent> ca = new ConsoleAppender<>();
+        ca.setTarget("System.err");
+        ca.setContext(lc);
+        ca.setEncoder(ple);
+        ca.start();
+
+        logger.addAppender(ca);
+
+        if (debug) {
+            logger.setLevel(Level.DEBUG);
+        } else {
+            logger.setLevel(Level.ERROR);
+        }
+    }
 
     public boolean parseCommandLineArgs(String[] args) {
         try {
@@ -82,12 +111,7 @@ public class DecoderApp {
             System.exit(0);
         }
 
-        Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
-        if (cli.hasOption('d')) {
-            root.setLevel(Level.DEBUG);
-        } else {
-            root.setLevel(Level.ERROR);
-        }
+        buildLogger(cli.hasOption('d'));
 
         DecoderOptions decoderOptions = new DecoderOptions();
 
