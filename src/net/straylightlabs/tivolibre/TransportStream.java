@@ -156,7 +156,7 @@ class TransportStream extends Stream {
         if (lastPesHeader.isFinished()) {
             pesHeader = PesHeader.createFrom(pesBuffer);
         } else {
-            pesHeader = PesHeader.createFrom(pesBuffer, lastPesHeader.getUnfinishedStartCode());
+            pesHeader = PesHeader.createFrom(pesBuffer, lastPesHeader.getUnfinishedStartCode(), lastPesHeader.getTrailingZeroBits());
         }
         lastPesHeader = pesHeader;
         return pesHeader.size();
