@@ -57,7 +57,7 @@ class TransportStreamDecoder extends StreamDecoder {
             while (true) {
                 fillBuffer();
 
-//                if (bytesWritten > 0xd52649e0L) {
+//                if (bytesWritten > 0x40ea2c) {
 //                    return false;
 //                }
 
@@ -122,7 +122,7 @@ class TransportStreamDecoder extends StreamDecoder {
 
                 decryptAndWritePacket(packet);
                 if (TivoDecoder.logger.isDebugEnabled() && packetCounter % 100000 == 0) {
-//                if (bytesWritten > 0xd52639e0L) {
+//                if (bytesWritten > 0x40ea00) {
                     TivoDecoder.logger.debug(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
                                     packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
                     );

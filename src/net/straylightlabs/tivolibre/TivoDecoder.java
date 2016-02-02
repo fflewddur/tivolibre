@@ -43,7 +43,7 @@ public class TivoDecoder {
 
     public final static Logger logger;
 
-    public final static String VERSION = "0.7.1";
+    public final static String VERSION = "0.7.3";
 
     static {
         logger = LoggerFactory.getLogger(TivoDecoder.class.toString());
