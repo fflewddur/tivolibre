@@ -58,31 +58,6 @@ public class DecoderApp {
             app.run();
         }
     }
-    private static void buildLogger(Boolean debug) {
-        LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
-        lc.reset();
-        Logger logger = lc.getLogger(Logger.ROOT_LOGGER_NAME);
-        logger.detachAndStopAllAppenders();
-
-        PatternLayoutEncoder ple = new PatternLayoutEncoder();
-        ple.setPattern("%msg%n");
-        ple.setContext(lc);
-        ple.start();
-
-        ConsoleAppender<ILoggingEvent> ca = new ConsoleAppender<>();
-        ca.setTarget("System.err");
-        ca.setContext(lc);
-        ca.setEncoder(ple);
-        ca.start();
-
-        logger.addAppender(ca);
-
-        if (debug) {
-            logger.setLevel(Level.DEBUG);
-        } else {
-            logger.setLevel(Level.ERROR);
-        }
-    }
 
     public boolean parseCommandLineArgs(String[] args) {
         try {
@@ -111,7 +86,12 @@ public class DecoderApp {
             System.exit(0);
         }
 
-        buildLogger(cli.hasOption('d'));
+        Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+        if (cli.hasOption('d')) {
+            root.setLevel(Level.DEBUG);
+        } else {
+            root.setLevel(Level.ERROR);
+        }
 
         DecoderOptions decoderOptions = new DecoderOptions();
 
