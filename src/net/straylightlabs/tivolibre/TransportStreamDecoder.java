@@ -57,7 +57,7 @@ class TransportStreamDecoder extends StreamDecoder {
             while (true) {
                 fillBuffer();
 
-//                if (bytesWritten > 0xd52649e0L) {
+//                if (bytesWritten > 0x40ea2c) {
 //                    return false;
 //                }
 
@@ -122,9 +122,9 @@ class TransportStreamDecoder extends StreamDecoder {
 
                 decryptAndWritePacket(packet);
                 if (TivoDecoder.logger.isDebugEnabled() && packetCounter % 100000 == 0) {
-//                if (bytesWritten > 0xd52639e0L) {
+//                if (bytesWritten > 0x40ea00) {
                     TivoDecoder.logger.debug(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
-                                    packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
+                            packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
                     );
 //                    TivoDecoder.logger.debug("{}", packet);
 //                    TivoDecoder.logger.debug("Packet data:\n" + packet.dump());
@@ -257,8 +257,8 @@ class TransportStreamDecoder extends StreamDecoder {
         }
         if (compatibilityMode) {
             TivoDecoder.logger.debug(String.format(
-                            "Writing unsynchronized bytes from %d to %d (0x%x to 0x%x)%noffset = %d, length = %d",
-                            bytesWritten, bytesWritten + length, bytesWritten, bytesWritten + length, offset, length)
+                    "Writing unsynchronized bytes from %d to %d (0x%x to 0x%x)%noffset = %d, length = %d",
+                    bytesWritten, bytesWritten + length, bytesWritten, bytesWritten + length, offset, length)
             );
             outputStream.write(inputBuffer.array(), offset, length);
         }
@@ -350,7 +350,7 @@ class TransportStreamDecoder extends StreamDecoder {
             // Create a stream for this PID unless one already exists
             if (!streams.containsKey(streamPid)) {
                 TivoDecoder.logger.debug(String.format("Creating a new %s stream for PID 0x%04x (0x%02x)",
-                                streamType, streamPid, streamTypeId)
+                        streamType, streamPid, streamTypeId)
                 );
                 TransportStream stream = new TransportStream(turingDecoder, streamType);
                 streams.put(streamPid, stream);
@@ -411,7 +411,7 @@ class TransportStreamDecoder extends StreamDecoder {
 
         if (resumeDecryptionAtByte > 0 && resumeDecryptionAtByte <= bytesWritten) {
             TivoDecoder.logger.warn(String.format("Resuming decryption at 0x%x, bytesWritten = 0x%x",
-                            resumeDecryptionAtByte, bytesWritten)
+                    resumeDecryptionAtByte, bytesWritten)
             );
             resumeDecryption();
         }
@@ -421,7 +421,7 @@ class TransportStreamDecoder extends StreamDecoder {
         TransportStream stream = streams.get(packet.getPID());
         if (stream == null) {
             TivoDecoder.logger.warn(String.format("No TransportStream exists with PID 0x%04x, creating one",
-                            packet.getPID())
+                    packet.getPID())
             );
             stream = new TransportStream(turingDecoder, TransportStream.StreamType.NOT_IN_PMT);
             streams.put(packet.getPID(), stream);

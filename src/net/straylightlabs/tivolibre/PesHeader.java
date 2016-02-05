@@ -34,24 +34,59 @@ public class PesHeader {
     private int bitPos;
     private int bitLength;
     private boolean isScrambled;
+    private StartCode currentStartCode;
+    private StartCode incompleteStartCode;
+    private int trailingZeroBits;
+    private int priorTrailingZeroBits;
 
     private static int START_CODE_PREFIX = 0x000001;
     private static int NOT_A_START_CODE = 0xffffffff;
     private static int BITS_PER_BYTE = 8;
     private static int BITS_PER_INT = 32;
 
-    public PesHeader(ByteBuffer source) {
+    public PesHeader() {
+    }
+
+    private PesHeader(ByteBuffer source, StartCode code, int priorTrailingZeroBits) {
         buffer = source;
+        this.priorTrailingZeroBits = priorTrailingZeroBits;
         try {
-            parseBytes();
+            if (code == null) {
+                parseBytes();
+            } else {
+                parseBytesFromStartCode(START_CODE_PREFIX, code);
+            }
         } catch (BufferUnderflowException e) {
-//            TivoDecoder.logger.debug("PES BufferUnderflow at bit position {}", bitPos);
+//            TivoDecoder.logger.debug("PES BufferUnderflow at bit position {} (startCode = {})", bitPos, currentStartCode);
+            incompleteStartCode = currentStartCode;
         }
         buffer = null;
     }
 
     public static PesHeader createFrom(ByteBuffer buffer) {
-        return new PesHeader(buffer);
+        return new PesHeader(buffer, null, 0);
+    }
+
+    public static PesHeader createFrom(ByteBuffer buffer, StartCode code, int priorTrailingZeroBits) {
+        return new PesHeader(buffer, code, priorTrailingZeroBits);
+    }
+
+    /**
+     * Returns true if we finished parsing all of the start codes before the packet ended.
+     */
+    public boolean isFinished() {
+        return trailingZeroBits == 0 && (incompleteStartCode == null || incompleteStartCode == StartCode.USER_DATA);
+    }
+
+    /**
+     * Returns the star code that we were parsing when we ran out of packet data.
+     */
+    public StartCode getUnfinishedStartCode() {
+        return incompleteStartCode;
+    }
+
+    public int getTrailingZeroBits() {
+        return trailingZeroBits;
     }
 
     /**
@@ -75,12 +110,18 @@ public class PesHeader {
         if (!nextStartCode()) {
             return;
         }
-        int startCodePrefix = getAndAdvanceBits(24);
+        int startCodePrefix = getAndAdvanceBits(24 - priorTrailingZeroBits);
+        priorTrailingZeroBits = 0;
         int startCodeValue = getAndAdvanceBits(BITS_PER_BYTE);
+        StartCode startCode = StartCode.valueOf(startCodeValue);
+        parseBytesFromStartCode(startCodePrefix, startCode);
+    }
+
+    private void parseBytesFromStartCode(int startCodePrefix, StartCode startCode) {
+        currentStartCode = startCode;
         while (startCodePrefix == START_CODE_PREFIX) {
-            StartCode startCode = StartCode.valueOf(startCodeValue);
-//            TivoDecoder.logger.debug("StartCode: " + startCode);
-            switch (startCode) {
+//            TivoDecoder.logger.debug("StartCode: " + currentStartCode);
+            switch (currentStartCode) {
                 case ANCILLARY_DATA:
                 case SEQUENCE_END:
                     break;
@@ -91,7 +132,7 @@ public class PesHeader {
                     }
                     break;
                 case PES_HEADER:
-                    parsePesHeader(startCodeValue);
+                    parsePesHeader();
                     break;
                 case PICTURE:
                     parsePictureHeader();
@@ -109,17 +150,19 @@ public class PesHeader {
                     parseUserData();
                     break;
                 default:
-                    TivoDecoder.logger.warn(String.format("Unknown PES start code: 0x%02x", startCodeValue));
+                    TivoDecoder.logger.warn(String.format("Unknown PES start code: 0x%02x", startCode));
                     rewind(BITS_PER_INT);
                     return;
             }
 
 //            TivoDecoder.logger.debug(String.format("startCodePrefix=0x%06x startCode=%s bitPos=%,d bitLength=%,d bitLimit=%,d",
-//                    startCodePrefix, startCode, bitPos, bitLength, buffer.limit() * BITS_PER_BYTE));
+//                    startCodePrefix, currentStartCode, bitPos, bitLength, buffer.limit() * BITS_PER_BYTE));
 
+            int startCodeValue = 0;
             if (nextStartCode()) {
                 startCodePrefix = getAndAdvanceBits(24);
                 startCodeValue = getAndAdvanceBits(BITS_PER_BYTE);
+                currentStartCode = StartCode.valueOf(startCodeValue);
             } else {
                 startCodePrefix = NOT_A_START_CODE;
             }
@@ -134,6 +177,7 @@ public class PesHeader {
      * they should be 0-padded such that the 24-bit start code and 8-bit stream ID fit in a byte-aligned 32-bit int.
      */
     private boolean nextStartCode() {
+        currentStartCode = null;
         if (!byteAlign()) {
             return false;
         }
@@ -141,7 +185,7 @@ public class PesHeader {
         int startCodePrefix = NOT_A_START_CODE;
         int startCodeLength = 0;
         try {
-            startCodePrefix = nextBits(24);
+            startCodePrefix = nextBits(24 - priorTrailingZeroBits);
 //            if (TivoDecoder.logger.isTraceEnabled()) {
 //                TivoDecoder.logger.trace(String.format("startCodePrefix: 0x%06x bitPos: %,d", startCodePrefix, bitPos));
 //            }
@@ -151,7 +195,8 @@ public class PesHeader {
                 startCodePrefix = nextBits(24);
             }
         } catch (BufferUnderflowException e) {
-//            TivoDecoder.logger.debug("Ran out of buffer while searching for next start code");
+            computeTrailingZeros();
+//            TivoDecoder.logger.debug("Ran out of buffer while searching for next start code (trailing zero bits: {})", trailingZeroBits);
         }
         if (startCodePrefix == START_CODE_PREFIX) {
             return true;
@@ -161,6 +206,16 @@ public class PesHeader {
                 rewind(startCodeLength);
             }
             return false;
+        }
+    }
+
+    private void computeTrailingZeros() {
+        int limit = buffer.limit();
+        if (limit > 0 && buffer.get(limit - 1) == 0) {
+            trailingZeroBits += BITS_PER_BYTE;
+        }
+        if (limit > 1 && buffer.get(limit - 2) == 0) {
+            trailingZeroBits += BITS_PER_BYTE;
         }
     }
 
@@ -238,10 +293,10 @@ public class PesHeader {
     /**
      * Parse the start of a PES packet.
      */
-    private void parsePesHeader(int startCodeValue) {
+    private void parsePesHeader() {
         // Skip over packet length field
         advanceBits(16);
-        if (StartCode.hasHeaderExtension(startCodeValue)) {
+        if (StartCode.hasHeaderExtension(currentStartCode)) {
             parsePesHeaderExtension();
         }
     }
@@ -396,7 +451,7 @@ public class PesHeader {
                 return SEQUENCE_END;
             } else if (startCode == 0xB8) {
                 return PICTURE_GROUP;
-            } else if (startCode == 0xBD || (startCode >= 0xC0) && startCode <= 0xEF) {
+            } else if (startCode == 0xBD || ((startCode >= 0xC0) && startCode <= 0xEF)) {
                 return PES_HEADER;
             } else if ((startCode >= 0x01) && startCode <= 0xAF) {
                 return SLICE;
@@ -407,8 +462,8 @@ public class PesHeader {
             }
         }
 
-        public static boolean hasHeaderExtension(int startCodeValue) {
-            return (startCodeValue == 0xBD || (startCodeValue >= 0xC0 && startCodeValue <= 0xEF));
+        public static boolean hasHeaderExtension(StartCode startCode) {
+            return startCode == PES_HEADER;
         }
     }
 

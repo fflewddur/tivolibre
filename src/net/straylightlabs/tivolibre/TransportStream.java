@@ -33,6 +33,7 @@ class TransportStream extends Stream {
     private final byte[] pesBufferArray;
     private int nextPacketPesOffset;
     private boolean decryptingPaused;
+    private PesHeader lastPesHeader;
 
     public static final int FRAME_SIZE = 188;
 
@@ -42,6 +43,7 @@ class TransportStream extends Stream {
         this.type = StreamType.NONE;
         pesBufferArray = new byte[FRAME_SIZE];
         pesBuffer = ByteBuffer.wrap(pesBufferArray);
+        lastPesHeader = new PesHeader();
     }
 
     public TransportStream(TuringDecoder decoder, StreamType type) {
@@ -50,6 +52,7 @@ class TransportStream extends Stream {
         this.type = type;
         pesBufferArray = new byte[FRAME_SIZE];
         pesBuffer = ByteBuffer.wrap(pesBufferArray);
+        lastPesHeader = new PesHeader();
     }
 
     /**
@@ -128,7 +131,7 @@ class TransportStream extends Stream {
         if (nextPacketPesOffset < payloadLength) {
             int packetPesOffset = nextPacketPesOffset;
             int sumOfPesHeaderLengths = packetPesOffset;
-            if (sumOfPesHeaderLengths > 0 || packet.isPayloadStart()) {
+            if (sumOfPesHeaderLengths > 0 || packet.isPayloadStart() || !lastPesHeader.isFinished()) {
                 // Only get PES header length if we know this is a payload start, or our prior header extended into it
                 sumOfPesHeaderLengths += getPesHeaderLength();
             }
@@ -149,7 +152,13 @@ class TransportStream extends Stream {
     }
 
     private int getPesHeaderLength() {
-        PesHeader pesHeader = PesHeader.createFrom(pesBuffer);
+        PesHeader pesHeader;
+        if (lastPesHeader.isFinished()) {
+            pesHeader = PesHeader.createFrom(pesBuffer);
+        } else {
+            pesHeader = PesHeader.createFrom(pesBuffer, lastPesHeader.getUnfinishedStartCode(), lastPesHeader.getTrailingZeroBits());
+        }
+        lastPesHeader = pesHeader;
         return pesHeader.size();
     }
 

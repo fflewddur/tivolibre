@@ -35,6 +35,7 @@ class BatchTester:
     args = None
     jarPath = None
     filesTested = 0
+    filesToTest = 0
 
     def run(self):
         self.args = self.parseArgs()
@@ -73,7 +74,8 @@ class BatchTester:
 
     def testFilesInDir(self):
         tivoFiles = self.listSourceFiles()
-
+        self.filesToTest = len(tivoFiles)
+        
         numSkipped = 0
         filesWithDifferences = []
         perfectFiles = []
@@ -103,7 +105,9 @@ class BatchTester:
     def decodeFile(self, inputPath):
         self.filesTested += 1
         outputPath = inputPath.replace(self.args.sourceExtension, self.args.ourExtension)
-        print(bcolors.OKBLUE + "Test #{:,d}: {}{}".format(self.filesTested, inputPath, bcolors.ENDC))
+        print(bcolors.OKBLUE + "Test #{:,d} of {:,d}: {}{}".format(
+            self.filesTested, self.filesToTest, inputPath, bcolors.ENDC
+        ))
         if (os.path.isfile(outputPath)):
             print("Deleting existing output file...")
             os.remove(outputPath)
