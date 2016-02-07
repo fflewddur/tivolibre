@@ -22,6 +22,9 @@
 
 package net.straylightlabs.tivolibre;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -34,6 +37,8 @@ class TransportStreamPacket {
     private ByteBuffer buffer;
     private int dataOffset;
     private int pesHeaderOffset;
+
+    private final static Logger logger = LoggerFactory.getLogger(TransportStreamPacket.class);
 
     public static TransportStreamPacket createFrom(ByteBuffer source, long packetId) throws IOException {
         TransportStreamPacket packet = new TransportStreamPacket();
@@ -90,10 +95,10 @@ class TransportStreamPacket {
 
     private boolean checkHeader(Header header) {
         if (!header.isValid()) {
-            TivoDecoder.logger.warn("Invalid TS packet header for packet {}", packetId);
+            logger.warn("Invalid TS packet header for packet {}", packetId);
             return false;
         } else if (header.hasTransportError()) {
-            TivoDecoder.logger.warn("Transport error flag set for packet {}", packetId);
+            logger.warn("Transport error flag set for packet {}", packetId);
             return false;
         }
         return true;

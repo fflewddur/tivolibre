@@ -23,6 +23,8 @@
 package net.straylightlabs.tivolibre;
 
 import net.straylightlabs.quickturing.QuickTuring;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 
@@ -34,6 +36,8 @@ class TuringStream {
     private byte[] cipherData;
     private QuickTuring quickTuring;
 
+    private final static Logger logger = LoggerFactory.getLogger(TransportStreamDecoder.class);
+    
     public TuringStream(int streamId, int blockId) {
         this.streamId = streamId;
         this.blockId = blockId;
@@ -102,6 +106,6 @@ class TuringStream {
                 sb.append(" ");
 
         }
-        TivoDecoder.logger.info(sb.toString());
+        logger.info(sb.toString());
     }
 }

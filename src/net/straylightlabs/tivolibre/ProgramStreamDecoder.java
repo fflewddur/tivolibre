@@ -22,6 +22,9 @@
 
 package net.straylightlabs.tivolibre;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -29,6 +32,8 @@ import java.io.OutputStream;
 class ProgramStreamDecoder extends StreamDecoder {
     private ProgramStream programStream;
 
+    private final static Logger logger = LoggerFactory.getLogger(ProgramStreamDecoder.class);
+    
     public ProgramStreamDecoder(TuringDecoder decoder, int mpegOffset, CountingDataInputStream inputStream,
                                 OutputStream outputStream) {
         super(decoder, mpegOffset, inputStream, outputStream);
@@ -51,7 +56,7 @@ class ProgramStreamDecoder extends StreamDecoder {
                     } else if (result == 0) {
                         outputStream.write(code);
                     } else if (result < 0) {
-                        TivoDecoder.logger.error("Error processing frame");
+                        logger.error("Error processing frame");
                         return false;
                     }
                 } else if (!first) {
@@ -65,10 +70,10 @@ class ProgramStreamDecoder extends StreamDecoder {
                 first = false;
             }
         } catch (EOFException e) {
-            TivoDecoder.logger.info("End of file reached");
+            logger.info("End of file reached");
             return true;
         } catch (IOException e) {
-            TivoDecoder.logger.error("Error reading program stream: ", e);
+            logger.error("Error reading program stream: ", e);
         }
 
         return false;

@@ -22,8 +22,6 @@
 
 package net.straylightlabs.tivolibre;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 
 import java.io.InputStream;
@@ -41,13 +39,7 @@ public class TivoDecoder {
     private final boolean compatibilityMode;
     private TivoStream tivoStream;
 
-    public final static Logger logger;
-
     public final static String VERSION = "0.7.3";
-
-    static {
-        logger = LoggerFactory.getLogger(TivoDecoder.class.toString());
-    }
 
     private TivoDecoder(InputStream inputStream, OutputStream outputStream, String mak, boolean compatibilityMode) {
         this.inputStream = inputStream;
@@ -116,7 +108,6 @@ public class TivoDecoder {
         PyTivoMetadata metadata = PyTivoMetadata.createFromMetadata(getMetadata());
         metadata.writeToFile(path);
     }
-
 
 
     public static String bytesToHexString(byte[] bytes, int offset, int length) {

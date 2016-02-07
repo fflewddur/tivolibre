@@ -22,6 +22,9 @@
 
 package net.straylightlabs.tivolibre;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.io.OutputStream;
 
@@ -32,6 +35,8 @@ public class ProgramStream extends Stream {
     private TuringStream activeStream;
     private int headerBufferPosition;
 
+    private final static Logger logger = LoggerFactory.getLogger(ProgramStream.class);
+    
     ProgramStream(CountingDataInputStream inputStream, OutputStream outputStream, TuringDecoder turingDecoder) {
         super();
         this.inputStream = inputStream;
@@ -54,7 +59,7 @@ public class ProgramStream extends Stream {
                 inputStream.read(header, headerBufferPosition, 5);
                 headerBufferPosition += 5;
                 if (((header[2] & 0xff) >> 6) != 0x2) {
-                    TivoDecoder.logger.warn(
+                    logger.warn(
                             String.format("PES (0x%02X) header mark != 0x2: 0x%x (is this an MPEG2-PS file?)",
                                     code, (header[2] & 0xff) >> 6)
                     );
@@ -107,7 +112,7 @@ public class ProgramStream extends Stream {
             int extByte = 5;
             boolean goAgain;
             if (headerLength > 27) {
-                TivoDecoder.logger.error("Packet header length is too large: {}", headerLength);
+                logger.error("Packet header length is too large: {}", headerLength);
                 return false;
             }
 
@@ -148,7 +153,7 @@ public class ProgramStream extends Stream {
         turingCrypted = 0;
         System.arraycopy(header, keyOffset, turingKey, 0, KEY_LENGTH);
         if (!doHeader()) {
-            TivoDecoder.logger.error("Error setting up the decryption cipher");
+            logger.error("Error setting up the decryption cipher");
             return false;
         }
         activeStream = turingDecoder.prepareFrame(code, turingBlockNumber);

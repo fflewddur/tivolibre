@@ -22,6 +22,9 @@
 
 package net.straylightlabs.tivolibre;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.HashMap;
@@ -36,6 +39,8 @@ abstract class StreamDecoder {
 
     protected long packetCounter;
     protected PatData patData;
+
+    private final static Logger logger = LoggerFactory.getLogger(StreamDecoder.class);
 
     protected StreamDecoder(TuringDecoder decoder, int mpegOffset, CountingDataInputStream inputStream,
                             OutputStream outputStream) {
@@ -58,7 +63,7 @@ abstract class StreamDecoder {
     protected void advanceToMpegOffset() throws IOException {
         int bytesToSkip = (int) (mpegOffset - inputStream.getPosition());
         if (bytesToSkip < 0) {
-            TivoDecoder.logger.error("Error: Stream advanced past MPEG data (MPEG at {}, current position = {})",
+            logger.error("Error: Stream advanced past MPEG data (MPEG at {}, current position = {})",
                     mpegOffset, inputStream.getPosition()
             );
         }
@@ -75,7 +80,7 @@ abstract class StreamDecoder {
 
         int tableId = packet.readUnsignedByteFromData();
         if (tableId != 0) {
-            TivoDecoder.logger.error(String.format("PAT Table ID must be 0x00 (found 0x%02x)", tableId));
+            logger.error(String.format("PAT Table ID must be 0x00 (found 0x%02x)", tableId));
             return false;
         }
 
@@ -83,11 +88,11 @@ abstract class StreamDecoder {
         int sectionLength = patField & 0x0fff;
 
         if ((patField & 0xC000) != 0x8000) {
-            TivoDecoder.logger.error(String.format("Failed to validate PAT Misc field: 0x%04x", patField));
+            logger.error(String.format("Failed to validate PAT Misc field: 0x%04x", patField));
             return false;
         }
         if ((patField & 0x0C00) != 0x0000) {
-            TivoDecoder.logger.error("Failed to validate PAT MBZ of section length");
+            logger.error("Failed to validate PAT MBZ of section length");
             return false;
         }
 
@@ -115,15 +120,15 @@ abstract class StreamDecoder {
 
             // Create a stream for this PID unless one already exists
             if (!streams.containsKey(patData.getProgramMapPid())) {
-                if (TivoDecoder.logger.isInfoEnabled()) {
-                    TivoDecoder.logger.info(String.format("Creating a new stream for PMT PID 0x%04x", patData.getProgramMapPid()));
+                if (logger.isInfoEnabled()) {
+                    logger.info(String.format("Creating a new stream for PMT PID 0x%04x", patData.getProgramMapPid()));
                 }
                 TransportStream stream = new TransportStream(turingDecoder);
                 streams.put(patData.getProgramMapPid(), stream);
             }
         }
         if (sectionLength < 0) {
-            TivoDecoder.logger.error("Problem parsing PAT: advanced too far in the data stream");
+            logger.error("Problem parsing PAT: advanced too far in the data stream");
             return false;
         }
 

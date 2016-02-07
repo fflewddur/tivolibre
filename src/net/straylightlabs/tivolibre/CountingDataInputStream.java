@@ -22,6 +22,9 @@
 
 package net.straylightlabs.tivolibre;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
@@ -34,6 +37,8 @@ import java.io.InputStream;
 class CountingDataInputStream implements AutoCloseable {
     private DataInputStream inputStream;
     private long position; // Current read position in @stream, in bytes.
+
+    private final static Logger logger = LoggerFactory.getLogger(CountingDataInputStream.class);
 
     public CountingDataInputStream(InputStream stream) {
         inputStream = new DataInputStream(stream);
@@ -103,7 +108,7 @@ class CountingDataInputStream implements AutoCloseable {
             }
         }
         if (totalBytesSkipped < bytesToSkip) {
-            TivoDecoder.logger.error("Could only skip {} of {} requested bytes", totalBytesSkipped, bytesToSkip);
+            logger.error("Could only skip {} of {} requested bytes", totalBytesSkipped, bytesToSkip);
         }
         position += totalBytesSkipped;
         return totalBytesSkipped;
@@ -111,7 +116,7 @@ class CountingDataInputStream implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
-        TivoDecoder.logger.debug("Closing CountingDataInputStream. Final read position: " + position);
+        logger.debug("Closing CountingDataInputStream. Final read position: " + position);
         inputStream.close();
     }
 }

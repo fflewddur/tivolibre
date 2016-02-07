@@ -22,6 +22,8 @@
 
 package net.straylightlabs.tivolibre;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
@@ -48,6 +50,8 @@ class TivoStream {
     private final OutputStream outputStream;
     private boolean processVideo;
     private boolean compatibilityMode;
+
+    private final static Logger logger = LoggerFactory.getLogger(TivoStream.class);
 
     public TivoStream(InputStream inputStream, OutputStream outputStream, String mak) {
         this.inputStream = inputStream;
@@ -79,7 +83,7 @@ class TivoStream {
                 }
             }
         } catch (IOException e) {
-            TivoDecoder.logger.error("Error reading TiVoStream file: ", e);
+            logger.error("Error reading TiVoStream file: ", e);
             return false;
         }
 
@@ -91,7 +95,7 @@ class TivoStream {
         if (!header.read()) {
             return false;
         }
-        TivoDecoder.logger.debug("Header: " + header);
+        logger.debug("Header: " + header);
 
         chunks = new TivoStreamChunk[header.getNumChunks()];
         for (int i = 0; i < header.getNumChunks(); i++) {
@@ -108,14 +112,14 @@ class TivoStream {
                 decoder = new TuringDecoder(chunks[i].getKey(mak));
                 metaDecoder = new TuringDecoder(chunks[i].getMetadataKey(mak));
             }
-            TivoDecoder.logger.debug("Chunk {}: {}", i, chunks[i]);
+            logger.debug("Chunk {}: {}", i, chunks[i]);
         }
         return true;
     }
 
     private boolean processVideo(CountingDataInputStream dataInputStream) {
         StreamDecoder streamDecoder;
-        TivoDecoder.logger.debug("File format: " + header.getFormat());
+        logger.debug("File format: " + header.getFormat());
         switch (header.getFormat()) {
             case PROGRAM_STREAM:
                 streamDecoder = new ProgramStreamDecoder(decoder, header.getMpegOffset(), dataInputStream, outputStream);
@@ -125,7 +129,7 @@ class TivoStream {
                         outputStream, compatibilityMode);
                 break;
             default:
-                TivoDecoder.logger.error("Error: unknown file format.");
+                logger.error("Error: unknown file format.");
                 return false;
         }
         return streamDecoder.process();
@@ -144,7 +148,7 @@ class TivoStream {
                 metadataChunks.add(doc);
             }
         } catch (IOException | ParserConfigurationException | SAXException e) {
-            TivoDecoder.logger.error("Error parsing XML metadata: ", e);
+            logger.error("Error parsing XML metadata: ", e);
         }
         return metadataChunks;
     }
@@ -172,7 +176,7 @@ class TivoStream {
             sb.append(String.format("<START OF CHUNK %d PAYLOAD>%s<END OF PAYLOAD>%n", i, chunks[i].getDataString()));
         }
 
-        TivoDecoder.logger.info(sb.toString());
+        logger.info(sb.toString());
     }
 
     public enum Format {

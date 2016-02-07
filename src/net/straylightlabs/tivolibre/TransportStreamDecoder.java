@@ -22,6 +22,9 @@
 
 package net.straylightlabs.tivolibre;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -41,6 +44,8 @@ class TransportStreamDecoder extends StreamDecoder {
     private static final int PACKETS_UNTIL_RESYNC = 4;
     private static final int DECRYPTION_PAUSED_INTERVAL = 0x100000;
 
+    private final static Logger logger = LoggerFactory.getLogger(TransportStreamDecoder.class);
+    
     public TransportStreamDecoder(TuringDecoder decoder, int mpegOffset, CountingDataInputStream inputStream,
                                   OutputStream outputStream, boolean compatibilityMode) {
         super(decoder, mpegOffset, inputStream, outputStream);
@@ -52,12 +57,12 @@ class TransportStreamDecoder extends StreamDecoder {
     public boolean process() {
         try {
             advanceToMpegOffset();
-            TivoDecoder.logger.debug("Starting TS processing at position {}", inputStream.getPosition());
+            logger.debug("Starting TS processing at position {}", inputStream.getPosition());
 
             while (true) {
                 fillBuffer();
 
-//                if (bytesWritten > 0x40ea2c) {
+//                if (bytesWritten > 0x4c700058) {
 //                    return false;
 //                }
 
@@ -65,24 +70,24 @@ class TransportStreamDecoder extends StreamDecoder {
                 try {
                     packet = TransportStreamPacket.createFrom(inputBuffer, ++packetCounter);
                 } catch (TransportStreamException e) {
-                    TivoDecoder.logger.warn("{}", e.getLocalizedMessage());
+                    logger.warn("{}", e.getLocalizedMessage());
                     packet = null;
                     while (packet == null) {
                         try {
                             packet = createPacketAtNextSyncByte(++packetCounter);
                         } catch (TransportStreamException e2) {
-                            TivoDecoder.logger.warn("Problem with this packet, moving on to the next: ", e);
+                            logger.warn("Problem with this packet, moving on to the next: ", e);
                         }
                     }
-                    if (TivoDecoder.logger.isInfoEnabled()) {
-                        TivoDecoder.logger.info(String.format("Re-synched at packet %d (byte 0x%x)", packetCounter, bytesWritten));
+                    if (logger.isInfoEnabled()) {
+                        logger.info(String.format("Re-synched at packet %d (byte 0x%x)", packetCounter, bytesWritten));
                     }
                 }
 
                 switch (packet.getPacketType()) {
                     case PROGRAM_ASSOCIATION_TABLE:
                         if (!processPatPacket(packet)) {
-                            TivoDecoder.logger.error("Error processing PAT packet");
+                            logger.error("Error processing PAT packet");
                             return false;
                         }
                         break;
@@ -90,7 +95,7 @@ class TransportStreamDecoder extends StreamDecoder {
                         if (packet.getPID() == patData.getProgramMapPid()) {
                             packet.setIsPmt(true);
                             if (!processPmtPacket(packet)) {
-                                TivoDecoder.logger.error("Error processing PMT packet");
+                                logger.error("Error processing PMT packet");
                                 return false;
                             }
                         } else {
@@ -101,7 +106,7 @@ class TransportStreamDecoder extends StreamDecoder {
 
                             if (packet.isTivo()) {
                                 if (!processTivoPacket(packet)) {
-                                    TivoDecoder.logger.error("Error processing TiVo packet");
+                                    logger.error("Error processing TiVo packet");
                                     return false;
                                 }
                             }
@@ -109,32 +114,32 @@ class TransportStreamDecoder extends StreamDecoder {
                         break;
                     case NULL:
                         // These packets are for maintaining a constant bit-rate; just copy them through to the output.
-                        TivoDecoder.logger.debug("NULL packet");
+                        logger.debug("NULL packet");
                         if (!compatibilityMode) {
                             bytesWritten += packet.getBytes().length;
                             continue;
                         }
                         break;
                     default:
-                        TivoDecoder.logger.warn("Unsupported packet type: {}", packet.getPacketType());
+                        logger.warn("Unsupported packet type: {}", packet.getPacketType());
                         return false;
                 }
 
                 decryptAndWritePacket(packet);
-                if (TivoDecoder.logger.isDebugEnabled() && packetCounter % 100000 == 0) {
-//                if (bytesWritten > 0x40ea00) {
-                    TivoDecoder.logger.debug(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
+                if (logger.isDebugEnabled() && packetCounter % 100000 == 0) {
+//                if (bytesWritten > 0x4c700000) {
+                    logger.debug(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
                             packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
                     );
-//                    TivoDecoder.logger.debug("{}", packet);
-//                    TivoDecoder.logger.debug("Packet data:\n" + packet.dump());
+//                    logger.debug("{}", packet);
+//                    logger.debug("Packet data:\n" + packet.dump());
                 }
             }
         } catch (EOFException e) {
-            TivoDecoder.logger.info("End of file reached");
+            logger.info("End of file reached");
             return true;
         } catch (IOException e) {
-            TivoDecoder.logger.error("Error reading transport stream: ", e);
+            logger.error("Error reading transport stream: ", e);
         }
 
         return false;
@@ -147,7 +152,7 @@ class TransportStreamDecoder extends StreamDecoder {
             if (bytesRead == -1) {
                 throw new EOFException();
             } else if (bytesRead < TransportStream.FRAME_SIZE) {
-                TivoDecoder.logger.warn("Only read {} bytes, expected {}", bytesRead, TransportStream.FRAME_SIZE);
+                logger.warn("Only read {} bytes, expected {}", bytesRead, TransportStream.FRAME_SIZE);
                 inputBuffer.limit(bytesRead);
             }
         } else {
@@ -193,12 +198,12 @@ class TransportStreamDecoder extends StreamDecoder {
                     if (unsynchronizedLength > 0) {
                         long deltaToNextInterval = DECRYPTION_PAUSED_INTERVAL - (bytesWritten & 0xfffff);
                         resumeDecryptionAtByte = bytesWritten + unsynchronizedLength;
-                        TivoDecoder.logger.debug(String.format("Starting value for resumeDecryptionAtByte: 0x%x", resumeDecryptionAtByte));
+                        logger.debug(String.format("Starting value for resumeDecryptionAtByte: 0x%x", resumeDecryptionAtByte));
                         // We'll resume decryption at the next position that's evenly divisible by the TS frame size
                         while (resumeDecryptionAtByte % DECRYPTION_PAUSED_INTERVAL != 0) {
                             resumeDecryptionAtByte += TransportStream.FRAME_SIZE;
                         }
-                        TivoDecoder.logger.debug(String.format("Resume decryption at: 0x%x", resumeDecryptionAtByte));
+                        logger.debug(String.format("Resume decryption at: 0x%x", resumeDecryptionAtByte));
                         boolean maskThirdByte = nextResumeDecryptionByteOffset == 0;
                         nextResumeDecryptionByteOffset = bytesWritten + deltaToNextInterval;
                         outputUnsynchronizedBytes(startPos, unsynchronizedLength, maskThirdByte);
@@ -256,7 +261,7 @@ class TransportStreamDecoder extends StreamDecoder {
             nextResumeDecryptionByteOffset += 0x100000;
         }
         if (compatibilityMode) {
-            TivoDecoder.logger.debug(String.format(
+            logger.debug(String.format(
                     "Writing unsynchronized bytes from %d to %d (0x%x to 0x%x)%noffset = %d, length = %d",
                     bytesWritten, bytesWritten + length, bytesWritten, bytesWritten + length, offset, length)
             );
@@ -291,14 +296,14 @@ class TransportStreamDecoder extends StreamDecoder {
         // Advance past table_id field
         int tableId = packet.readUnsignedByteFromData();
         if (tableId != 0x02) {
-            TivoDecoder.logger.error(String.format("Unexpected Table ID for PMT: 0x%02x", tableId & 0xff));
+            logger.error(String.format("Unexpected Table ID for PMT: 0x%02x", tableId & 0xff));
             return false;
         }
 
         int pmtField = packet.readUnsignedShortFromData();
         boolean longSyntax = (pmtField & 0x8000) == 0x8000;
         if (!longSyntax) {
-            TivoDecoder.logger.error("PMT packet uses unknown syntax");
+            logger.error("PMT packet uses unknown syntax");
             return false;
         }
         int sectionLength = pmtField & 0x0fff;
@@ -318,14 +323,14 @@ class TransportStreamDecoder extends StreamDecoder {
         int programInfoLength = packet.readUnsignedShortFromData() & 0x0fff;
         sectionLength -= 2;
 
-        if (TivoDecoder.logger.isTraceEnabled()) {
-            TivoDecoder.logger.trace(
+        if (logger.isTraceEnabled()) {
+            logger.trace(
                     String.format("Program number: 0x%04x Section number: 0x%02x Last section number: 0x%02x " + "" +
                                     "Version: 0x%02x CurrentNextIndicator: %s PCR PID: 0x%04x",
                             programNumber, sectionNumber, lastSectionNumber, version, currentNextIndicator, pcrPid));
         }
         if (programInfoLength > 0) {
-            TivoDecoder.logger.trace("Skipping {} bytes of descriptors", programInfoLength);
+            logger.trace("Skipping {} bytes of descriptors", programInfoLength);
             packet.advanceDataOffset(programInfoLength);
         }
 
@@ -349,7 +354,7 @@ class TransportStreamDecoder extends StreamDecoder {
 
             // Create a stream for this PID unless one already exists
             if (!streams.containsKey(streamPid)) {
-                TivoDecoder.logger.debug(String.format("Creating a new %s stream for PID 0x%04x (0x%02x)",
+                logger.debug(String.format("Creating a new %s stream for PID 0x%04x (0x%02x)",
                         streamType, streamPid, streamTypeId)
                 );
                 TransportStream stream = new TransportStream(turingDecoder, streamType);
@@ -363,13 +368,13 @@ class TransportStreamDecoder extends StreamDecoder {
     private boolean processTivoPacket(TransportStreamPacket packet) {
         int fileType = packet.readIntFromData();
         if (fileType != 0x5469566f) {
-            TivoDecoder.logger.error(String.format("Invalid TiVo private data fileType: 0x%08x", fileType));
+            logger.error(String.format("Invalid TiVo private data fileType: 0x%08x", fileType));
             return false;
         }
 
         int validator = packet.readUnsignedShortFromData();
         if (validator != 0x8103) {
-            TivoDecoder.logger.error(String.format("Invalid TiVo private data validator: 0x%04x", validator));
+            logger.error(String.format("Invalid TiVo private data validator: 0x%04x", validator));
             return false;
         }
 
@@ -387,7 +392,7 @@ class TransportStreamDecoder extends StreamDecoder {
 
             TransportStream stream = streams.get(packetId);
             if (stream == null) {
-                TivoDecoder.logger.error(String.format("No TransportStream with ID 0x%04x found", packetId));
+                logger.error(String.format("No TransportStream with ID 0x%04x found", packetId));
                 return false;
             }
             stream.setStreamId(streamId);
@@ -410,7 +415,7 @@ class TransportStreamDecoder extends StreamDecoder {
         writePacketBytes(packetBytes);
 
         if (resumeDecryptionAtByte > 0 && resumeDecryptionAtByte <= bytesWritten) {
-            TivoDecoder.logger.warn(String.format("Resuming decryption at 0x%x, bytesWritten = 0x%x",
+            logger.warn(String.format("Resuming decryption at 0x%x, bytesWritten = 0x%x",
                     resumeDecryptionAtByte, bytesWritten)
             );
             resumeDecryption();
@@ -420,7 +425,7 @@ class TransportStreamDecoder extends StreamDecoder {
     private TransportStream getPacketStream(TransportStreamPacket packet) {
         TransportStream stream = streams.get(packet.getPID());
         if (stream == null) {
-            TivoDecoder.logger.warn(String.format("No TransportStream exists with PID 0x%04x, creating one",
+            logger.warn(String.format("No TransportStream exists with PID 0x%04x, creating one",
                     packet.getPID())
             );
             stream = new TransportStream(turingDecoder, TransportStream.StreamType.NOT_IN_PMT);
@@ -440,14 +445,14 @@ class TransportStreamDecoder extends StreamDecoder {
             int headerBits = intFromByteArray(packetBytes, offset);
             TransportStreamPacket.Header header = new TransportStreamPacket.Header(headerBits);
             if (header.isValid() && !header.isPriority()) {
-                TivoDecoder.logger.debug(String.format("Found a valid TS header at 0x%x, pid=0x%04x, checking next frame", nextResumeDecryptionByteOffset, header.getPID()));
+                logger.debug(String.format("Found a valid TS header at 0x%x, pid=0x%04x, checking next frame", nextResumeDecryptionByteOffset, header.getPID()));
                 nextMaskByteOffset = nextResumeDecryptionByteOffset + TransportStream.FRAME_SIZE;
             }
             nextResumeDecryptionByteOffset += 0x100000;
             packetBytes[offset + 3] &= 0x3F;
         }
         if (nextMaskByteOffset > 0 && packetBytes.length + bytesWritten > nextMaskByteOffset + 3) {
-            TivoDecoder.logger.debug(String.format("Masking byte at 0x%x", nextMaskByteOffset));
+            logger.debug(String.format("Masking byte at 0x%x", nextMaskByteOffset));
             int offset = (int) (nextMaskByteOffset - bytesWritten);
             packetBytes[offset + 3] &= 0x3F;
 
@@ -473,7 +478,7 @@ class TransportStreamDecoder extends StreamDecoder {
             }
             bytesWritten += packetBytes.length;
         } catch (Exception e) {
-            TivoDecoder.logger.error("Error writing file: ", e);
+            logger.error("Error writing file: ", e);
             throw new RuntimeException();
         }
     }

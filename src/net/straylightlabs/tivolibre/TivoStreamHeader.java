@@ -22,6 +22,9 @@
 
 package net.straylightlabs.tivolibre;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 
 class TivoStreamHeader {
@@ -31,6 +34,8 @@ class TivoStreamHeader {
     private int numChunks;
     private final CountingDataInputStream input;
 
+    private final static Logger logger = LoggerFactory.getLogger(TivoStreamHeader.class);
+    
     public TivoStreamHeader(CountingDataInputStream inputStream) {
         fileType = new char[4];
         mpegOffset = 0;
@@ -60,7 +65,7 @@ class TivoStreamHeader {
             // Next two bytes tell us how many TiVo-specific chunks of data are coming
             numChunks = input.readUnsignedShort();
         } catch (IOException e) {
-            TivoDecoder.logger.error("Error reading header: ", e);
+            logger.error("Error reading header: ", e);
             return false;
         }
 

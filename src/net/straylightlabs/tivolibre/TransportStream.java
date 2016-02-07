@@ -22,6 +22,9 @@
 
 package net.straylightlabs.tivolibre;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
@@ -34,6 +37,8 @@ class TransportStream extends Stream {
     private int nextPacketPesOffset;
     private boolean decryptingPaused;
     private PesHeader lastPesHeader;
+
+    private final static Logger logger = LoggerFactory.getLogger(TransportStream.class);
 
     public static final int FRAME_SIZE = 188;
 
@@ -89,10 +94,10 @@ class TransportStream extends Stream {
             copyPayloadToPesBuffer(packet);
             calculatePesHeaderOffset(packet);
         } catch (RuntimeException e) {
-            TivoDecoder.logger.error("Exception while calculating PES header offset: ", e);
-            TivoDecoder.logger.info("{}", packet);
-            TivoDecoder.logger.info("Packet data:\n{}", TivoDecoder.bytesToHexString(packet.getBytes()));
-            TivoDecoder.logger.info("PES buffer:\n{}", TivoDecoder.bytesToHexString(pesBufferArray, 0, pesBuffer.limit()));
+            logger.error("Exception while calculating PES header offset: ", e);
+            logger.info("{}", packet);
+            logger.info("Packet data:\n{}", TivoDecoder.bytesToHexString(packet.getBytes()));
+            logger.info("PES buffer:\n{}", TivoDecoder.bytesToHexString(pesBufferArray, 0, pesBuffer.limit()));
             throw e;
         }
 
@@ -180,11 +185,11 @@ class TransportStream extends Stream {
         int encryptedLength = encryptedData.length - packet.getPesHeaderOffset();
         byte[] data = new byte[encryptedLength];
         System.arraycopy(encryptedData, packet.getPesHeaderOffset(), data, 0, encryptedLength);
-//        TivoDecoder.logger.debug("Data to decrypt:\n{}", TivoDecoder.bytesToHexString(data));
+//        logger.debug("Data to decrypt:\n{}", TivoDecoder.bytesToHexString(data));
         if (!decryptBuffer(data)) {
-            TivoDecoder.logger.error(String.format("Decrypting packet in stream 0x%04x failed", packet.getPID()));
+            logger.error(String.format("Decrypting packet in stream 0x%04x failed", packet.getPID()));
         }
-//        TivoDecoder.logger.debug("Decrypted data:\n{}", TivoDecoder.bytesToHexString(data));
+//        logger.debug("Decrypted data:\n{}", TivoDecoder.bytesToHexString(data));
         return packet.getScrambledBytes(data);
     }
 

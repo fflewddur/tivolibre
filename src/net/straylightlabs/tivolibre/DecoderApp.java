@@ -24,10 +24,6 @@ package net.straylightlabs.tivolibre;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
-import ch.qos.logback.core.ConsoleAppender;
-import ch.qos.logback.classic.LoggerContext;
-import ch.qos.logback.classic.encoder.PatternLayoutEncoder;
-import ch.qos.logback.classic.spi.ILoggingEvent;
 import org.apache.commons.cli.*;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
@@ -50,6 +46,8 @@ public class DecoderApp {
     private Options options;
     private CommandLine cli;
 
+    private final static org.slf4j.Logger logger = LoggerFactory.getLogger(DecoderApp.class);
+
     private static final String PREF_MAK = "mak";
 
     public static void main(String args[]) {
@@ -65,7 +63,7 @@ public class DecoderApp {
             CommandLineParser parser = new DefaultParser();
             cli = parser.parse(options, args);
         } catch (ParseException e) {
-            TivoDecoder.logger.error("Parsing command line options failed: {}", e.getLocalizedMessage());
+            logger.error("Parsing command line options failed: {}", e.getLocalizedMessage());
             showUsage();
             return false;
         }
@@ -108,7 +106,7 @@ public class DecoderApp {
         }
 
         if (cli.hasOption("compat-mode")) {
-            TivoDecoder.logger.debug("Running in compatibility mode");
+            logger.debug("Running in compatibility mode");
             decoderOptions.compatibilityMode = true;
         }
 
@@ -143,7 +141,7 @@ public class DecoderApp {
                 }
                 decode(inputStream, outputStream, decoderOptions);
             } catch (FileNotFoundException e) {
-                TivoDecoder.logger.error("Input file {} not found: {}", cli.getOptionValue('i'), e.getLocalizedMessage());
+                logger.error("Input file {} not found: {}", cli.getOptionValue('i'), e.getLocalizedMessage());
             } finally {
                 if (inputStream != null) {
                     inputStream.close();
@@ -153,7 +151,7 @@ public class DecoderApp {
                 }
             }
         } catch (IOException e) {
-            TivoDecoder.logger.error("IOException: {}", e.getLocalizedMessage(), e);
+            logger.error("IOException: {}", e.getLocalizedMessage(), e);
         }
     }
 
@@ -161,7 +159,7 @@ public class DecoderApp {
         assert(path != null);
         Path dir = path.getParent();
         Path file = path.getFileName();
-        TivoDecoder.logger.info("dir = '{}', file = '{}'", dir, file);
+        logger.info("dir = '{}', file = '{}'", dir, file);
         if (dir != null) {
             return Paths.get(dir.toString(), file.toString() + suffix);
         } else {
@@ -197,9 +195,9 @@ public class DecoderApp {
             }
 
         } catch (FileNotFoundException e) {
-            TivoDecoder.logger.error("Error: {}", e.getLocalizedMessage());
+            logger.error("Error: {}", e.getLocalizedMessage());
         } catch (IOException e) {
-            TivoDecoder.logger.error("Error reading/writing files: {}", e.getLocalizedMessage());
+            logger.error("Error reading/writing files: {}", e.getLocalizedMessage());
         }
     }
 
@@ -232,12 +230,12 @@ public class DecoderApp {
         int counter = 0;
         for (Document d : decoder.getMetadata()) {
             String chunkFilename = String.format("chunk-%02d.xml", counter++);
-            TivoDecoder.logger.debug("Saving metadata chunk {} to {}...", counter, chunkFilename);
+            logger.debug("Saving metadata chunk {} to {}...", counter, chunkFilename);
             try {
                 OutputStream out = new FileOutputStream(chunkFilename);
                 printDocument(d, out);
             } catch (IOException | TransformerException e) {
-                TivoDecoder.logger.error("Error saving file {}: ", chunkFilename, e);
+                logger.error("Error saving file {}: ", chunkFilename, e);
             }
         }
     }

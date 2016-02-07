@@ -23,6 +23,8 @@
 package net.straylightlabs.tivolibre;
 
 import org.apache.commons.codec.digest.DigestUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -33,6 +35,8 @@ class TivoStreamChunk {
     private ChunkType type;
     private byte[] data;
     private final CountingDataInputStream inputStream;
+
+    private final static Logger logger = LoggerFactory.getLogger(TivoStreamChunk.class);
 
     public final static int CHUNK_HEADER_SIZE = 12; // Size of each chunk's header, in bytes
     private final static String MEDIA_MAK_PREFIX = "tivo:TiVo DVR:";
@@ -67,7 +71,7 @@ class TivoStreamChunk {
             int paddingBytes = chunkSize - dataSize - CHUNK_HEADER_SIZE;
             inputStream.skipBytes(paddingBytes);
         } catch (IOException | IllegalArgumentException e) {
-            TivoDecoder.logger.error("Error reading chunk: ", e);
+            logger.error("Error reading chunk: ", e);
             return false;
         }
 

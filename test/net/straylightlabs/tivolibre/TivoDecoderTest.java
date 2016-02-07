@@ -25,6 +25,8 @@ package net.straylightlabs.tivolibre;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -49,6 +51,8 @@ public class TivoDecoderTest {
     private OutputStream outputStream;
     private String mak;
 
+    private final static Logger logger = LoggerFactory.getLogger(TivoDecoderTest.class);
+    
     @Before
     public void before() {
         String filename = System.getProperty("testFile");
@@ -56,7 +60,7 @@ public class TivoDecoderTest {
         try {
             inputStream = Files.newInputStream(Paths.get(filename), StandardOpenOption.READ);
         } catch (IOException e) {
-            TivoDecoder.logger.error("IOException opening inputStream '{}': ", filename, e);
+            logger.error("IOException opening inputStream '{}': ", filename, e);
         }
         assertNotNull(inputStream);
 
@@ -65,7 +69,7 @@ public class TivoDecoderTest {
         try {
             outputStream = Files.newOutputStream(Paths.get(filename), StandardOpenOption.CREATE);
         } catch (IOException e) {
-            TivoDecoder.logger.error("IOException opening outputStream '{}': ", filename, e);
+            logger.error("IOException opening outputStream '{}': ", filename, e);
         }
         assertNotNull(outputStream);
 
@@ -78,7 +82,7 @@ public class TivoDecoderTest {
         try {
             inputStream.close();
         } catch (IOException e) {
-            TivoDecoder.logger.error("IOException closing inputStream: ", e);
+            logger.error("IOException closing inputStream: ", e);
         }
     }
 
