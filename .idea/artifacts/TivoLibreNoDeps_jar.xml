@@ -3,6 +3,7 @@
     <output-path>$PROJECT_DIR$/jar</output-path>
     <root id="archive" name="tivo-libre-no-deps.jar">
       <element id="module-output" name="TivoLibre" />
+      <element id="file-copy" path="$PROJECT_DIR$/resources/logback.xml" />
     </root>
   </artifact>
 </component>

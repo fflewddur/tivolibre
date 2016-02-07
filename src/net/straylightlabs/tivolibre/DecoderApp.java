@@ -24,6 +24,10 @@ package net.straylightlabs.tivolibre;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
+import ch.qos.logback.core.ConsoleAppender;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.encoder.PatternLayoutEncoder;
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import org.apache.commons.cli.*;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;

@@ -8,6 +8,7 @@
       <element id="extracted-dir" path="$PROJECT_DIR$/lib/logback-classic-1.1.3.jar" path-in-jar="/" />
       <element id="extracted-dir" path="$PROJECT_DIR$/lib/logback-core-1.1.3.jar" path-in-jar="/" />
       <element id="extracted-dir" path="$PROJECT_DIR$/lib/slf4j-api-1.7.12.jar" path-in-jar="/" />
+      <element id="file-copy" path="$PROJECT_DIR$/resources/logback.xml" />
     </root>
   </artifact>
 </component>
