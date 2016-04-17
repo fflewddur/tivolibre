@@ -41,10 +41,12 @@ public class PesHeader {
     private StartCode incompleteStartCode;
     private int trailingZeroBits;
     private int priorTrailingZeroBits;
+    private boolean endsWithStartPrefix;
 
     private final static Logger logger = LoggerFactory.getLogger(PesHeader.class);
 
     private static int START_CODE_PREFIX = 0x000001;
+    private static int START_CODE_PREFIX_BIT_LEN = 24;
     private static int NOT_A_START_CODE = 0xffffffff;
     private static int BITS_PER_BYTE = 8;
     private static int BITS_PER_INT = 32;
@@ -52,12 +54,12 @@ public class PesHeader {
     public PesHeader() {
     }
 
-    private PesHeader(ByteBuffer source, StartCode code, int priorTrailingZeroBits) {
+    private PesHeader(ByteBuffer source, StartCode code, int priorTrailingZeroBits, boolean lastHeaderEndedWithStartPrefix) {
         buffer = source;
         this.priorTrailingZeroBits = priorTrailingZeroBits;
         try {
             if (code == null) {
-                parseBytes();
+                parseBytes(lastHeaderEndedWithStartPrefix);
             } else {
                 parseBytesFromStartCode(START_CODE_PREFIX, code);
             }
@@ -69,18 +71,24 @@ public class PesHeader {
     }
 
     public static PesHeader createFrom(ByteBuffer buffer) {
-        return new PesHeader(buffer, null, 0);
+        return new PesHeader(buffer, null, 0, false);
     }
 
-    public static PesHeader createFrom(ByteBuffer buffer, StartCode code, int priorTrailingZeroBits) {
-        return new PesHeader(buffer, code, priorTrailingZeroBits);
+    public static PesHeader createFrom(ByteBuffer buffer, StartCode code, int priorTrailingZeroBits, boolean lastHeaderEndedWithStartPrefix) {
+        return new PesHeader(buffer, code, priorTrailingZeroBits, lastHeaderEndedWithStartPrefix);
     }
 
     /**
      * Returns true if we finished parsing all of the start codes before the packet ended.
      */
     public boolean isFinished() {
-        return trailingZeroBits == 0 && (incompleteStartCode == null || incompleteStartCode == StartCode.USER_DATA);
+        return  trailingZeroBits == 0 &&
+                !endsWithStartPrefix &&
+                (incompleteStartCode == null || incompleteStartCode == StartCode.USER_DATA);
+    }
+
+    public boolean endsWithStartPrefix() {
+        return endsWithStartPrefix;
     }
 
     /**
@@ -111,11 +119,14 @@ public class PesHeader {
         return bytes;
     }
 
-    private void parseBytes() {
-        if (!nextStartCode()) {
-            return;
+    private void parseBytes(boolean lastHeaderEndedWithStartPrefix) {
+        int startCodePrefix = START_CODE_PREFIX;
+        if (!lastHeaderEndedWithStartPrefix) {
+            if (!nextStartCode()) {
+                return;
+            }
+            startCodePrefix = getAndAdvanceBits(START_CODE_PREFIX_BIT_LEN - priorTrailingZeroBits);
         }
-        int startCodePrefix = getAndAdvanceBits(24 - priorTrailingZeroBits);
         priorTrailingZeroBits = 0;
         int startCodeValue = getAndAdvanceBits(BITS_PER_BYTE);
         StartCode startCode = StartCode.valueOf(startCodeValue);
@@ -165,9 +176,17 @@ public class PesHeader {
 
             int startCodeValue = 0;
             if (nextStartCode()) {
-                startCodePrefix = getAndAdvanceBits(24);
-                startCodeValue = getAndAdvanceBits(BITS_PER_BYTE);
-                currentStartCode = StartCode.valueOf(startCodeValue);
+                try {
+                    startCodePrefix = getAndAdvanceBits(START_CODE_PREFIX_BIT_LEN);
+                    startCodeValue = getAndAdvanceBits(BITS_PER_BYTE);
+                    currentStartCode = StartCode.valueOf(startCodeValue);
+                } catch (BufferUnderflowException e) {
+                    // We ran out of data while reading the startCodeValue
+//                    logger.debug("Ran out of data while reading startCodeValue");
+                    currentStartCode = StartCode.UNKNOWN;
+                    startCodePrefix = NOT_A_START_CODE;
+                    endsWithStartPrefix = true;
+                }
             } else {
                 startCodePrefix = NOT_A_START_CODE;
             }
@@ -190,14 +209,12 @@ public class PesHeader {
         int startCodePrefix = NOT_A_START_CODE;
         int startCodeLength = 0;
         try {
-            startCodePrefix = nextBits(24 - priorTrailingZeroBits);
-//            if (logger.isTraceEnabled()) {
-//                logger.trace(String.format("startCodePrefix: 0x%06x bitPos: %,d", startCodePrefix, bitPos));
-//            }
+            startCodePrefix = nextBits(START_CODE_PREFIX_BIT_LEN - priorTrailingZeroBits);
+//            logger.debug(String.format("startCodePrefix: 0x%06x bitPos: %,d", startCodePrefix, bitPos));
             while (startCodePrefix == 0) {
                 advanceBits(BITS_PER_BYTE);
                 startCodeLength += BITS_PER_BYTE;
-                startCodePrefix = nextBits(24);
+                startCodePrefix = nextBits(START_CODE_PREFIX_BIT_LEN);
             }
         } catch (BufferUnderflowException e) {
             computeTrailingZeros();
@@ -398,7 +415,7 @@ public class PesHeader {
     }
 
     private void parseUserData() {
-        while (nextBits(24) != START_CODE_PREFIX) {
+        while (nextBits(START_CODE_PREFIX_BIT_LEN) != START_CODE_PREFIX) {
             advanceBits(BITS_PER_BYTE);
         }
     }

@@ -62,7 +62,7 @@ class TransportStreamDecoder extends StreamDecoder {
             while (true) {
                 fillBuffer();
 
-//                if (bytesWritten > 0x4c700058) {
+//                if (bytesWritten > 0x88500000L) {
 //                    return false;
 //                }
 
@@ -127,7 +127,7 @@ class TransportStreamDecoder extends StreamDecoder {
 
                 decryptAndWritePacket(packet);
                 if (logger.isDebugEnabled() && packetCounter % 100000 == 0) {
-//                if (bytesWritten > 0x4c700000) {
+//                if (bytesWritten > 0x884F8000L) {
                     logger.debug(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
                             packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
                     );
@@ -354,7 +354,7 @@ class TransportStreamDecoder extends StreamDecoder {
 
             // Create a stream for this PID unless one already exists
             if (!streams.containsKey(streamPid)) {
-                logger.debug(String.format("Creating a new %s stream for PID 0x%04x (0x%02x)",
+                logger.debug(String.format("Creating a new %s stream for PID 0x%04x (type=0x%02x)",
                         streamType, streamPid, streamTypeId)
                 );
                 TransportStream stream = new TransportStream(turingDecoder, streamType);
@@ -395,6 +395,7 @@ class TransportStreamDecoder extends StreamDecoder {
                 logger.error(String.format("No TransportStream with ID 0x%04x found", packetId));
                 return false;
             }
+//            logger.debug(String.format("Setting key for stream 0x%03x (0x%04x)", streamId, packetId));
             stream.setStreamId(streamId);
             stream.setKey(packet.readBytesFromData(16));
             streamLength -= 16;
