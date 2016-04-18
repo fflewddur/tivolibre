@@ -327,6 +327,9 @@ public class PesHeader {
         // Skip over most flags
         advanceBits(2);
         isScrambled = getAndAdvanceBits(2) > 0;
+//        if (isScrambled) {
+//            logger.debug("PES header is scrambled");
+//        }
         advanceBits(12);
 
         int dataLength = readNextUnsignedByte();

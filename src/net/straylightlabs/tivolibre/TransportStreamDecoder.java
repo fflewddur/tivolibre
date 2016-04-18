@@ -38,6 +38,7 @@ class TransportStreamDecoder extends StreamDecoder {
     private boolean decryptionPaused;
     private long nextResumeDecryptionByteOffset;
     private long nextMaskByteOffset;
+    private boolean showDebugOutput;
     private final boolean compatibilityMode;
 
     private static final byte SYNC_BYTE_VALUE = 0x47;
@@ -62,7 +63,7 @@ class TransportStreamDecoder extends StreamDecoder {
             while (true) {
                 fillBuffer();
 
-//                if (bytesWritten > 0x88500000L) {
+//                if (bytesWritten > 0x39700000L) {
 //                    return false;
 //                }
 
@@ -127,7 +128,8 @@ class TransportStreamDecoder extends StreamDecoder {
 
                 decryptAndWritePacket(packet);
                 if (logger.isDebugEnabled() && packetCounter % 100000 == 0) {
-//                if (bytesWritten > 0x884F8000L) {
+//                if (bytesWritten > 0x39700000L - 188L) {
+//                    showDebugOutput = true;
                     logger.debug(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
                             packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
                     );
@@ -408,6 +410,13 @@ class TransportStreamDecoder extends StreamDecoder {
         TransportStream stream = getPacketStream(packet);
 
         byte[] packetBytes = stream.processPacket(packet);
+//        byte[] packetBytes;
+//        if (showDebugOutput) {
+//            packetBytes = stream.processPacket(packet, true, 152);
+//            logger.debug("Decrypted packetBytes:\n{}", TivoDecoder.bytesToHexString(packetBytes));
+//        } else {
+//            packetBytes = stream.processPacket(packet);
+//        }
 
         if (decryptionPaused) {
             maskBytes(packetBytes);

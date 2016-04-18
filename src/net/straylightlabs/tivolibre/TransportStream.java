@@ -37,6 +37,8 @@ class TransportStream extends Stream {
     private int nextPacketPesOffset;
     private boolean decryptingPaused;
     private PesHeader lastPesHeader;
+    private boolean debug;
+    private int debugOffset;
 
     private final static Logger logger = LoggerFactory.getLogger(TransportStream.class);
 
@@ -90,6 +92,12 @@ class TransportStream extends Stream {
      * @return The byte array to write to the output stream
      */
     public byte[] processPacket(TransportStreamPacket packet) {
+        return processPacket(packet, false, 0);
+    }
+
+    public byte[] processPacket(TransportStreamPacket packet, boolean debug, int debugAtOffset) {
+        this.debug = debug;
+        this.debugOffset = debugAtOffset;
         try {
             copyPayloadToPesBuffer(packet);
             calculatePesHeaderOffset(packet);
@@ -186,11 +194,21 @@ class TransportStream extends Stream {
         int encryptedLength = encryptedData.length - packet.getPesHeaderOffset();
         byte[] data = new byte[encryptedLength];
         System.arraycopy(encryptedData, packet.getPesHeaderOffset(), data, 0, encryptedLength);
-//        logger.debug("Data to decrypt:\n{}", TivoDecoder.bytesToHexString(data));
+//        if (debug) {
+//            logger.debug("Data to decrypt:\n{}", TivoDecoder.bytesToHexString(data));
+//            data[debugOffset] = -124;
+//            logger.debug(String.format("Value at offset %d: 0x%02x", debugOffset, data[debugOffset]));
+//        }
         if (!decryptBuffer(data)) {
             logger.error(String.format("Decrypting packet in stream 0x%04x failed", packet.getPID()));
         }
-//        logger.debug("Decrypted data:\n{}", TivoDecoder.bytesToHexString(data));
+//        if (debug) {
+//            logger.debug("Decrypted data:\n{}", TivoDecoder.bytesToHexString(data));
+//            logger.debug(String.format("Decrypted value at offset %d: 0x%02x <---- \n", debugOffset, data[debugOffset]));
+//            if (data[debugOffset] == 0x35) {
+//                logger.error("\n\nFOUND IT!!!\n\n===========\n\n");
+//            }
+//        }
         return packet.getScrambledBytes(data);
     }
 
