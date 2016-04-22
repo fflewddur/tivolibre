@@ -39,7 +39,7 @@ public class TivoDecoder {
     private final boolean compatibilityMode;
     private TivoStream tivoStream;
 
-    public final static String VERSION = "0.7.3.90";
+    public final static String VERSION = "0.7.4";
 
     private TivoDecoder(InputStream inputStream, OutputStream outputStream, String mak, boolean compatibilityMode) {
         this.inputStream = inputStream;
