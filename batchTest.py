@@ -39,6 +39,9 @@ class BatchTester:
 
     def run(self):
         self.args = self.parseArgs()
+        if self.args.fixNames:
+            self.fixNames()
+            return
         with tempfile.TemporaryDirectory() as tmpDir:
             self.copyJarToTmpDir(tmpDir)
             self.printJarVersion()
@@ -61,7 +64,31 @@ class BatchTester:
         parser.add_argument('-j', '--jar',
                             help="Path to the TivoLibre JAR (default is " + defaultJarPath +")",
                             default=defaultJarPath, metavar="JAR_PATH")
+        parser.add_argument('-f', '--fix', help="Fix reference file names to match expectations",
+                            action='store_true', dest='fixNames')
         return parser.parse_args()
+
+    def fixNames(self):
+        print("Fixing file names in {}...".format(self.args.testDir))
+        sourceFiles = []
+        for path, subdirs, files in os.walk(self.args.testDir):
+            for name in files:
+                if self.isNonReferenceFile(name):
+                    fixedName = name.replace(self.args.ourExtension, self.args.refExtension)
+                    self.renameFile(path, name, fixedName)
+
+    def isNonReferenceFile(self, name):
+        return (
+            not name.startswith('.') and name.endswith(self.args.ourExtension)
+            and not name.endswith(self.args.refExtension)
+        )
+
+    def renameFile(self, path, srcName, destName):
+        srcPath = os.path.join(path, srcName)
+        destPath = os.path.join(path, destName)
+        if not os.path.isfile(destPath):
+            print("Renaming '{}' to '{}'".format(srcPath, destPath))
+            shutil.move(srcPath, destPath)
 
     def copyJarToTmpDir(self, tmpDir):
         destPath = os.path.join(tmpDir, 'tivo-libre.jar')
@@ -75,7 +102,7 @@ class BatchTester:
     def testFilesInDir(self):
         tivoFiles = self.listSourceFiles()
         self.filesToTest = len(tivoFiles)
-        
+
         numSkipped = 0
         filesWithDifferences = []
         perfectFiles = []
@@ -107,15 +134,15 @@ class BatchTester:
         outputPath = inputPath.replace(self.args.sourceExtension, self.args.ourExtension)
         print(bcolors.OKBLUE + "Test #{:,d} of {:,d}: {}{}".format(
             self.filesTested, self.filesToTest, inputPath, bcolors.ENDC
-        ))
+        ), flush=True)
         if (os.path.isfile(outputPath)):
             print("Deleting existing output file...")
             os.remove(outputPath)
-        print("Decoding to {}...".format(outputPath))
+        print("Decoding to {}...".format(outputPath), flush=True)
         subprocess.run(['java', '-jar', self.jarPath, '-m', self.args.mak, '-i', inputPath,
                         '-o', outputPath, '--compat-mode'])
         referencePath = outputPath.replace(self.args.ourExtension, self.args.refExtension)
-        print("Comparing output to reference file {}...".format(referencePath))
+        print("Comparing output to reference file {}...".format(referencePath), flush=True)
         result = subprocess.run(['diff', outputPath, referencePath])
 
         filesAreSame = None
@@ -126,8 +153,9 @@ class BatchTester:
             print(bcolors.OKGREEN + "These files are identical!" + bcolors.ENDC)
             filesAreSame = True
 
-        print("Deleting output file...")
+        print("Deleting output file...", flush=True)
         os.remove(outputPath)
+
         return filesAreSame
 
     def printResults(self, perfectFiles, filesWithDifferences):
