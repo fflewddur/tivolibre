@@ -33,6 +33,16 @@ The TivoDecoder class also includes methods for fetching the metadata embedded i
 
 TivoLibre can be configured to use your app's existing logging framework via the SLF4J logging facade.
 
+# Building
+TivoLibre uses the Gradle build system and expects a source .TiVo file to be available for running tests. You can specify the location of and MAK associated with this test file by creating a gradle.properties file and adjusting the following properties to point at your preferred test file:
+
+    # Specify settings for our unit tests
+    mak = 0123456789
+    testFile = test-files\\test.TiVo
+    outFile = test-files\\test.mpg
+
+You can then build the project with the command `gradle build`.
+
 # Dependencies
 TivoLibre makes use of the Stream APIs introduced in Java 8 and will not run on older Java virtual machines.
 

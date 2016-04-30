@@ -8,10 +8,13 @@ hs_err_pid*
 
 # build directories
 /out
+/build
 
 # System files
 .DS_Store
 
 # IDE files
-/.idea/workspace.xml
-/.idea/tasks.xml
+/.idea
+/gradle.properties
+/test-files
+/.gradle
