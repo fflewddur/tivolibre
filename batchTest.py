@@ -49,7 +49,7 @@ class BatchTester:
 
     def parseArgs(self):
         parser = argparse.ArgumentParser()
-        defaultJarPath = os.path.join('.', 'jar', 'tivo-libre.jar')
+        defaultJarPath = os.path.join('.', 'build', 'libs', 'TivoDecoder.jar')
         parser.add_argument('-m', '--mak', help="MAK for files in the test directory", required=True)
         parser.add_argument('-d', '--dir', help="Directory containing files to test", required=True,
                             metavar='TEST_DIR', dest='testDir')
