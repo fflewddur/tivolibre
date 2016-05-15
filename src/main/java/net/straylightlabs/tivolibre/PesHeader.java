@@ -32,7 +32,7 @@ import java.nio.ByteBuffer;
  * This class models the PES headers that are not encrypted in TiVo MPEG-2 Transport Streams.
  * We need to calculate the length of these headers so that we can begin the decryption process after they end.
  */
-public class PesHeader {
+class PesHeader {
     private ByteBuffer buffer;
     private int bitPos;
     private int bitLength;
@@ -51,7 +51,7 @@ public class PesHeader {
     private static int BITS_PER_BYTE = 8;
     private static int BITS_PER_INT = 32;
 
-    public PesHeader() {
+    PesHeader() {
     }
 
     private PesHeader(ByteBuffer source, StartCode code, int priorTrailingZeroBits, boolean lastHeaderEndedWithStartPrefix) {
@@ -70,42 +70,48 @@ public class PesHeader {
         buffer = null;
     }
 
-    public static PesHeader createFrom(ByteBuffer buffer) {
+    static PesHeader createFrom(ByteBuffer buffer) {
         return new PesHeader(buffer, null, 0, false);
     }
 
-    public static PesHeader createFrom(ByteBuffer buffer, StartCode code, int priorTrailingZeroBits, boolean lastHeaderEndedWithStartPrefix) {
+    static PesHeader createFrom(ByteBuffer buffer, StartCode code, int priorTrailingZeroBits, boolean lastHeaderEndedWithStartPrefix) {
         return new PesHeader(buffer, code, priorTrailingZeroBits, lastHeaderEndedWithStartPrefix);
     }
 
     /**
      * Returns true if we finished parsing all of the start codes before the packet ended.
+     *
+     * @return true if we've finished parsing all of the start codes before the packet ended, false otherwise
      */
-    public boolean isFinished() {
+    boolean isFinished() {
         return  trailingZeroBits == 0 &&
                 !endsWithStartPrefix &&
                 (incompleteStartCode == null || incompleteStartCode == StartCode.USER_DATA);
     }
 
-    public boolean endsWithStartPrefix() {
+    boolean endsWithStartPrefix() {
         return endsWithStartPrefix;
     }
 
     /**
-     * Returns the star code that we were parsing when we ran out of packet data.
+     * Returns the start code that we were parsing when we ran out of packet data.
+     *
+     * @return the start code that continues into the next packet
      */
-    public StartCode getUnfinishedStartCode() {
+    StartCode getUnfinishedStartCode() {
         return incompleteStartCode;
     }
 
-    public int getTrailingZeroBits() {
+    int getTrailingZeroBits() {
         return trailingZeroBits;
     }
 
     /**
      * Returns the length of the PES headers for the provided buffer.
+     *
+     * @return the size in bytes of the PES header
      */
-    public int size() {
+    int size() {
         if (isScrambled) {
             // Scrambled packets need to be decoded, so report a length of 0
             return 0;

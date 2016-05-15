@@ -21,7 +21,11 @@
  */
 
 apply plugin: 'java'
+apply plugin: 'maven'
+apply plugin: 'signing'
 
+group = 'net.straylightlabs'
+archivesBaseName = 'tivo-libre'
 version = '0.7.4'
 
 repositories {
@@ -29,11 +33,21 @@ repositories {
 }
 
 dependencies {
-    testCompile 'junit:junit:4.+'
-    compile 'commons-cli:commons-cli:1.+'
-    compile 'commons-codec:commons-codec:1.+'
-    compile group: 'org.slf4j', name: 'slf4j-api', version: '1.+'
-    compile group: 'ch.qos.logback', name: 'logback-classic', version: '1.+'
+    testCompile 'junit:junit:4.12'
+    compile 'commons-cli:commons-cli:1.3.1'
+    compile 'commons-codec:commons-codec:1.10'
+    compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.21'
+    compile group: 'ch.qos.logback', name: 'logback-classic', version: '1.1.7'
+}
+
+task javadocJar(type: Jar) {
+    classifier = 'javadoc'
+    from javadoc
+}
+
+task sourcesJar(type: Jar) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
 }
 
 jar {
@@ -60,4 +74,57 @@ test {
     systemProperties['mak'] = mak
     systemProperties['testFile'] = testFile
     systemProperties['outFile'] = outFile
+}
+
+artifacts {
+    archives javadocJar, sourcesJar
+}
+
+signing {
+    sign configurations.archives
+}
+
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+            repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
+                authentication(userName: ossrhUsername, password: ossrhPassword)
+            }
+
+            snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
+                authentication(userName: ossrhUsername, password: ossrhPassword)
+            }
+
+            pom.project {
+                name 'TivoLibre'
+                packaging 'jar'
+                artifactId 'tivo-libre'
+                description 'TivoLibre is a Java library for decoding TiVo files to standard MPEG files'
+                url 'https://github.com/fflewddur/tivolibre'
+
+                scm {
+                    connection 'scm:git:https://github.com/fflewddur/tivolibre.git'
+                    developerConnection 'scm:git:https://github.com/fflewddur/tivolibre.git'
+                    url 'https://github.com/fflewddur/tivolibre.git'
+                }
+
+                licenses {
+                    license {
+                        name 'GNU General Public License (GPL)'
+                        url 'http://www.gnu.org/licenses/gpl.txt'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id 'fflewddur'
+                        name 'Todd Kulesza'
+                        email 'todd@dropline.net'
+                    }
+                }
+            }
+        }
+    }
 }

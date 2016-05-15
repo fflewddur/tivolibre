@@ -84,6 +84,9 @@ public class QuickTuring {
 
     /**
      * Sets the key on the cipher instance.
+     *
+     * @param key the new cipher key
+     * @param length the length of the cipher key
      */
     public void setTuringKey(byte[] key, int length) {
         if ((length & 0x03) != 0 || length > MAX_KEY_LENGTH) {
@@ -169,6 +172,9 @@ public class QuickTuring {
      * between the mixed key and the S-boxes that depend on them, and also
      * to avoid any "chosen-IV" interactions with the keyed S-boxes, not that I
      * can think of any.
+     *
+     * @param iv the initialization vector
+     * @param length length of the initialization vector
      */
     public void setTuringIV(byte[] iv, int length) {
         int i, j;
@@ -260,6 +266,9 @@ public class QuickTuring {
     /**
      * Generate a 340-byte buffer of cipher data.
      * Return the number of bytes generated
+     *
+     * @param buf the buffer to store the generated cipher data in
+     * @return the number of bytes generated
      */
     public int turingGen(byte[] buf) {
         if (buf.length < MAX_STREAM_LENGTH) {

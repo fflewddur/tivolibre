@@ -50,6 +50,10 @@ public class TivoDecoder {
 
     /**
      * DEPRECATED: Use the TivoDecoder.Builder class to create TivoDecoder objects.
+     *
+     * @param inputStream the input stream representing an encrypted .TiVo file
+     * @param outputStream the output stream to write the decrypted .TiVo file to
+     * @param mak the media access key to use when decrypting @inputStream
      */
     @Deprecated
     public TivoDecoder(InputStream inputStream, OutputStream outputStream, String mak) {
@@ -61,6 +65,8 @@ public class TivoDecoder {
 
     /**
      * Decode the specified @inputStream with @mak, printing the results to @outputStream.
+     *
+     * @return true if the stream is successfully decoded
      */
     public boolean decode() {
         verifyInternalState();
@@ -71,6 +77,8 @@ public class TivoDecoder {
 
     /**
      * Decode only the metadata from @inputStream. Prints nothing to @outputStream.
+     *
+     * @return true if the metadata is successfully decoded
      */
     public boolean decodeMetadata() {
         tivoStream = new TivoStream(inputStream, null, mak);
@@ -90,6 +98,8 @@ public class TivoDecoder {
 
     /**
      * Return a list of XML Documents representing the recording metadata for the processed TiVo file.
+     *
+     * @return List of Documents representing the stream's metadata
      */
     public List<Document> getMetadata() {
         if (tivoStream == null) {
@@ -100,6 +110,8 @@ public class TivoDecoder {
 
     /**
      * Save the TiVo file's metadata in PyTivo's format.
+     *
+     * @param path Directory path in which to save the stream's metadata
      */
     public void saveMetadata(Path path) {
         if (tivoStream == null) {
@@ -137,21 +149,40 @@ public class TivoDecoder {
         private String mak;
         private boolean compatibilityMode;
 
+        /**
+         * @param is an input stream representing the .TiVo file to decrypt
+         * @return a reference to this Builder object
+         */
         public Builder input(InputStream is) {
             inputStream = is;
             return this;
         }
 
+        /**
+         * @param os the output stream to save the decrypted .TiVo file to
+         * @return a reference to this Builder object
+         */
         public Builder output(OutputStream os) {
             outputStream = os;
             return this;
         }
 
+        /**
+         * @param mak the media access key to use when decrypting the input stream
+         * @return a reference to this Builder object
+         */
         public Builder mak(String mak) {
             this.mak = mak;
             return this;
         }
 
+        /**
+         * In compatibility mode, TivoLibre will attempt to produce output files that are identical to TiVo's
+         * DirectShow filter. Since TiVo's DirectShow filter includes some bugs, this setting defaults to false.
+         *
+         * @param val true to enable binary compatibility mode with TiVo's DirectShow filter
+         * @return a reference to this Builder object
+         */
         public Builder compatibilityMode(boolean val) {
             compatibilityMode = val;
             return this;
@@ -159,6 +190,8 @@ public class TivoDecoder {
 
         /**
          * Builds a new TivoDecoder instance from the list of given parameters.
+         *
+         * @return a new TivoDecoder instance
          */
         public TivoDecoder build() {
             verifyInternalState();
