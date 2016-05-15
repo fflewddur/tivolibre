@@ -42,6 +42,9 @@ jar {
 
 task appJar(type: Jar) {
     archiveName = 'TivoDecoder.jar'
+    from('src/main/app-resources') {
+        include '*.xml'
+    }
     manifest {
         attributes "Main-Class": "net.straylightlabs.tivolibre.DecoderApp"
     }
