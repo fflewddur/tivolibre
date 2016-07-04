@@ -63,7 +63,7 @@ class TransportStreamDecoder extends StreamDecoder {
             while (true) {
                 fillBuffer();
 
-//                if (bytesWritten > 0x39700000L) {
+//                if (bytesWritten > 0x38700L) {
 //                    return false;
 //                }
 
@@ -128,7 +128,7 @@ class TransportStreamDecoder extends StreamDecoder {
 
                 decryptAndWritePacket(packet);
                 if (logger.isDebugEnabled() && packetCounter % 100000 == 0) {
-//                if (bytesWritten > 0x39700000L - 188L) {
+//                if (bytesWritten > 0x38000L - 188L) {
 //                    showDebugOutput = true;
                     logger.debug(String.format("PacketId: %,d Type: %s PID: 0x%04x Position after reading: %,d",
                             packetCounter, packet.getPacketType(), packet.getPID(), inputStream.getPosition())
