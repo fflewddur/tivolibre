@@ -48,7 +48,7 @@ You can then build the project with the command `gradle build`.
 # Dependencies
 TivoLibre makes use of the Stream APIs introduced in Java 8 and will not run on older Java virtual machines.
 
-When used as a stand-alone application, TivoLibre requires commons-codec-1.9.jar and commons-cli-1.3.1.jar (or higher) from Apache Commons, as well as SLF4J and Logback. These libraries are already included in tivo-libre.jar.
+When used as a stand-alone application, TivoLibre requires commons-codec-1.9.jar and commons-cli-1.3.1.jar (or higher) from Apache Commons, as well as SLF4J and Logback. These libraries are already included in TivoDecoder.jar.
 
 When used as a library, TivoLibre only requires commons-codec-1.9.jar (or higher) and slf4j-api.jar. If you wish to view log output from TivoLibre, you'll also need the appropriate SLF4J bindings for your preferred logging framework.
 
