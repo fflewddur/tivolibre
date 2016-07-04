@@ -37,8 +37,8 @@ class TransportStream extends Stream {
     private int nextPacketPesOffset;
     private boolean decryptingPaused;
     private PesHeader lastPesHeader;
-    private boolean debug;
-    private int debugOffset;
+//    private boolean debug;
+//    private int debugOffset;
 
     private final static Logger logger = LoggerFactory.getLogger(TransportStream.class);
 
@@ -96,8 +96,8 @@ class TransportStream extends Stream {
     }
 
     public byte[] processPacket(TransportStreamPacket packet, boolean debug, int debugAtOffset) {
-        this.debug = debug;
-        this.debugOffset = debugAtOffset;
+//        this.debug = debug;
+//        this.debugOffset = debugAtOffset;
         try {
             copyPayloadToPesBuffer(packet);
             calculatePesHeaderOffset(packet);
@@ -146,7 +146,7 @@ class TransportStream extends Stream {
             int sumOfPesHeaderLengths = packetPesOffset;
             if (sumOfPesHeaderLengths > 0 || packet.isPayloadStart() || !lastPesHeader.isFinished()) {
                 // Only get PES header length if we know this is a payload start, or our prior header extended into it
-                sumOfPesHeaderLengths += getPesHeaderLength();
+                sumOfPesHeaderLengths += getPesHeaderLength(packet);
             }
 
             if (sumOfPesHeaderLengths <= pesBuffer.limit()) {
@@ -164,7 +164,7 @@ class TransportStream extends Stream {
         }
     }
 
-    private int getPesHeaderLength() {
+    private int getPesHeaderLength(TransportStreamPacket packet) {
         PesHeader pesHeader;
         if (lastPesHeader.isFinished()) {
             pesHeader = PesHeader.createFrom(pesBuffer);
@@ -173,7 +173,17 @@ class TransportStream extends Stream {
                     lastPesHeader.getTrailingZeroBits(), lastPesHeader.endsWithStartPrefix());
         }
         lastPesHeader = pesHeader;
+        addTimeStampsToPacket(pesHeader, packet);
         return pesHeader.size();
+    }
+
+    private void addTimeStampsToPacket(PesHeader header, TransportStreamPacket packet) {
+        if (header.hasPTS()) {
+            packet.setPTS(header.getPTS());
+        }
+        if (header.hasDTS()) {
+            packet.setDTS(header.getDTS());
+        }
     }
 
     public boolean decryptBuffer(byte[] buffer) {

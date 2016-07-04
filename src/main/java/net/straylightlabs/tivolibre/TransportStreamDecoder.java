@@ -29,6 +29,10 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.PriorityQueue;
+
+import static net.straylightlabs.tivolibre.FrameGroup.DTS_DEFAULT;
+import static net.straylightlabs.tivolibre.FrameGroup.PTS_DEFAULT;
 
 class TransportStreamDecoder extends StreamDecoder {
     private ByteBuffer inputBuffer;
@@ -38,20 +42,26 @@ class TransportStreamDecoder extends StreamDecoder {
     private boolean decryptionPaused;
     private long nextResumeDecryptionByteOffset;
     private long nextMaskByteOffset;
-    private boolean showDebugOutput;
+    //    private boolean showDebugOutput;
     private final boolean compatibilityMode;
+    private final PriorityQueue<FrameGroup> frameBuffer;
+    private FrameGroup currentFrameGroup;
 
     private static final byte SYNC_BYTE_VALUE = 0x47;
     private static final int PACKETS_UNTIL_RESYNC = 4;
     private static final int DECRYPTION_PAUSED_INTERVAL = 0x100000;
+    private static final int FRAME_BUFFER_MAX_SIZE = 20000; // Flush the frame buffer when it reaches this size
+    private static final int FRAME_BUFFER_MIN_SIZE = 10000; // Keep this many FrameGroups in the buffer after flushing
 
     private final static Logger logger = LoggerFactory.getLogger(TransportStreamDecoder.class);
-    
+
     public TransportStreamDecoder(TuringDecoder decoder, int mpegOffset, CountingDataInputStream inputStream,
                                   OutputStream outputStream, boolean compatibilityMode) {
         super(decoder, mpegOffset, inputStream, outputStream);
         inputBuffer = ByteBuffer.allocate(TransportStream.FRAME_SIZE);
         this.compatibilityMode = compatibilityMode;
+        this.frameBuffer = new PriorityQueue<>();
+        this.currentFrameGroup = new FrameGroup();
     }
 
     @Override
@@ -138,6 +148,9 @@ class TransportStreamDecoder extends StreamDecoder {
                 }
             }
         } catch (EOFException e) {
+            if (!compatibilityMode) {
+                flushEntireFrameBuffer();
+            }
             logger.info("End of file reached");
             return true;
         } catch (IOException e) {
@@ -422,6 +435,17 @@ class TransportStreamDecoder extends StreamDecoder {
             maskBytes(packetBytes);
         }
 
+        // If this is the start of a new PES payload, start a new FrameGroup; if our FrameGroup buffer is full, flush it
+        if (packet.isPayloadStart()) {
+            frameBuffer.add(currentFrameGroup);
+            currentFrameGroup = new FrameGroup(packet.getPTS(), packet.getDTS());
+            if (frameBuffer.size() > FRAME_BUFFER_MAX_SIZE) {
+                flushPartialFrameBuffer();
+            }
+        } else {
+            currentFrameGroup.updateTimestamps(packet.getPTS(), packet.getDTS());
+        }
+
         writePacketBytes(packetBytes);
 
         if (resumeDecryptionAtByte > 0 && resumeDecryptionAtByte <= bytesWritten) {
@@ -476,6 +500,46 @@ class TransportStreamDecoder extends StreamDecoder {
         }
     }
 
+    private void flushEntireFrameBuffer() {
+        logger.debug("flushEntireFrameBuffer");
+        frameBuffer.add(currentFrameGroup);
+        currentFrameGroup = new FrameGroup();
+        flushFrameBuffer(true);
+    }
+
+    private void flushPartialFrameBuffer() {
+        logger.debug("flushPartialFrameBuffer");
+        flushFrameBuffer(false);
+    }
+
+    private void flushFrameBuffer(boolean flushEntireBuffer) {
+        long lastPTS = PTS_DEFAULT, lastDTS = DTS_DEFAULT;
+        try {
+            while (frameBuffer.size() > FRAME_BUFFER_MIN_SIZE || (flushEntireBuffer && frameBuffer.size() > 0)) {
+                FrameGroup frameGroup = frameBuffer.poll();
+                long pts, dts;
+                pts = frameGroup.getPTS();
+                dts = frameGroup.getDTS();
+                if (dts != DTS_DEFAULT) {
+                    if (dts < lastDTS) {
+                        logger.error("This DTS is less than the last DTS we saw ({} vs {})", dts, lastDTS);
+                    }
+                    lastDTS = dts;
+                }
+//                if (pts != PTS_DEFAULT) {
+//                    if (pts < lastPTS) {
+//                        logger.error("This PTS is less than the last PTS we saw ({} vs {})", pts, lastPTS);
+//                    }
+//                    lastPTS = pts;
+//                }
+                frameGroup.writeTo(outputStream);
+            }
+        } catch (Exception e) {
+            logger.error("Error writing file: ", e);
+            throw new RuntimeException();
+        }
+    }
+
     int intFromByteArray(byte[] bytes, int offset) {
         return bytes[offset] << 24 | (bytes[offset + 1] & 0xFF) << 16 |
                 (bytes[offset + 2] & 0xFF) << 8 | (bytes[offset + 3] & 0xFF);
@@ -483,8 +547,13 @@ class TransportStreamDecoder extends StreamDecoder {
 
     private void writePacketBytes(byte[] packetBytes) {
         try {
-            if (!decryptionPaused || compatibilityMode) {
+            if (compatibilityMode) {
                 outputStream.write(packetBytes);
+            } else if (!decryptionPaused) {
+//                outputStream.write(packetBytes);
+                currentFrameGroup.addFrame(packetBytes);
+//            } else {
+//                currentFrameGroup.addFrame(packetBytes);
             }
             bytesWritten += packetBytes.length;
         } catch (Exception e) {

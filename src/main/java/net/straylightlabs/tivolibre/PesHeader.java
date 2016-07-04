@@ -28,6 +28,9 @@ import org.slf4j.LoggerFactory;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
+import static net.straylightlabs.tivolibre.FrameGroup.DTS_DEFAULT;
+import static net.straylightlabs.tivolibre.FrameGroup.PTS_DEFAULT;
+
 /**
  * This class models the PES headers that are not encrypted in TiVo MPEG-2 Transport Streams.
  * We need to calculate the length of these headers so that we can begin the decryption process after they end.
@@ -42,6 +45,8 @@ class PesHeader {
     private int trailingZeroBits;
     private int priorTrailingZeroBits;
     private boolean endsWithStartPrefix;
+    private long pts;
+    private long dts;
 
     private final static Logger logger = LoggerFactory.getLogger(PesHeader.class);
 
@@ -52,9 +57,12 @@ class PesHeader {
     private static int BITS_PER_INT = 32;
 
     PesHeader() {
+        pts = PTS_DEFAULT;
+        dts = DTS_DEFAULT;
     }
 
     private PesHeader(ByteBuffer source, StartCode code, int priorTrailingZeroBits, boolean lastHeaderEndedWithStartPrefix) {
+        this();
         buffer = source;
         this.priorTrailingZeroBits = priorTrailingZeroBits;
         try {
@@ -84,7 +92,7 @@ class PesHeader {
      * @return true if we've finished parsing all of the start codes before the packet ended, false otherwise
      */
     boolean isFinished() {
-        return  trailingZeroBits == 0 &&
+        return trailingZeroBits == 0 &&
                 !endsWithStartPrefix &&
                 (incompleteStartCode == null || incompleteStartCode == StartCode.USER_DATA);
     }
@@ -123,6 +131,22 @@ class PesHeader {
             bytes++;
         }
         return bytes;
+    }
+
+    boolean hasPTS() {
+        return pts != PTS_DEFAULT;
+    }
+
+    long getPTS() {
+        return pts;
+    }
+
+    boolean hasDTS() {
+        return dts != DTS_DEFAULT;
+    }
+
+    long getDTS() {
+        return dts;
     }
 
     private void parseBytes(boolean lastHeaderEndedWithStartPrefix) {
@@ -180,6 +204,7 @@ class PesHeader {
 //            logger.debug(String.format("startCodePrefix=0x%06x startCode=%s bitPos=%,d bitLength=%,d bitLimit=%,d",
 //                    startCodePrefix, currentStartCode, bitPos, bitLength, buffer.limit() * BITS_PER_BYTE));
 
+            @SuppressWarnings("all")
             int startCodeValue = 0;
             if (nextStartCode()) {
                 try {
@@ -336,11 +361,88 @@ class PesHeader {
         if (isScrambled) {
             logger.debug("PES header is scrambled");
         }
-        advanceBits(12);
+        advanceBits(4);
+
+        // Do we have PTS or DTS data?
+        int tsFlags = getAndAdvanceBits(2);
+        advanceBits(6);
 
         int dataLength = readNextUnsignedByte();
+
+        int marker;
+        long pts = 0, dts = 0;
+        if (tsFlags == 2) {
+            marker = getAndAdvanceBits(4);
+            if (marker != 2) {
+                logger.warn("PTS doesn't start with 0010");
+            }
+            pts |= (((long)getAndAdvanceBits(3)) << 30);
+            marker = getAndAdvanceBits(1);
+            if (marker != 1) {
+                logger.warn("PTS first marker is not 0x1");
+            }
+            pts |= (getAndAdvanceBits(15) << 15);
+            marker = getAndAdvanceBits(1);
+            if (marker != 1) {
+                logger.warn("PTS second marker is not 0x1");
+            }
+            pts |= getAndAdvanceBits(15);
+            marker = getAndAdvanceBits(1);
+            if (marker != 1) {
+                logger.warn("PTS third marker is not 0x1");
+            }
+            this.pts = pts;
+//            logger.debug("PTS = {}", Long.toUnsignedString(pts));
+            dataLength -= 40 / BITS_PER_BYTE;
+        } else if (tsFlags == 3) {
+            marker = getAndAdvanceBits(4);
+            if (marker != 3) {
+                logger.warn("PTS doesn't start with 0011");
+            }
+            pts |= (((long)getAndAdvanceBits(3)) << 30);
+            marker = getAndAdvanceBits(1);
+            if (marker != 1) {
+                logger.warn("PTS first marker is not 0x1");
+            }
+            pts |= (getAndAdvanceBits(15) << 15);
+            marker = getAndAdvanceBits(1);
+            if (marker != 1) {
+                logger.warn("PTS second marker is not 0x1");
+            }
+            pts |= getAndAdvanceBits(15);
+            marker = getAndAdvanceBits(1);
+            if (marker != 1) {
+                logger.warn("PTS third marker is not 0x1");
+            }
+            marker = getAndAdvanceBits(4);
+            if (marker != 1) {
+                logger.warn("DTS doesn't start with 0001");
+            }
+            dts |= (((long)getAndAdvanceBits(3)) << 30);
+            marker = getAndAdvanceBits(1);
+            if (marker != 1) {
+                logger.warn("DTS first marker is not 0x1");
+            }
+            dts |= (getAndAdvanceBits(15) << 15);
+            marker = getAndAdvanceBits(1);
+            if (marker != 1) {
+                logger.warn("DTS second marker is not 0x1");
+            }
+            dts |= getAndAdvanceBits(15);
+            marker = getAndAdvanceBits(1);
+            if (marker != 1) {
+                logger.warn("DTS third marker is not 0x1");
+            }
+            this.pts = pts;
+            this.dts = dts;
+//            logger.debug("PTS = {} and DTS = {}", Long.toUnsignedString(pts), Long.toUnsignedString(dts));
+            dataLength -= 80 / BITS_PER_BYTE;
+        } else {
+            logger.debug("NO PTS");
+        }
+
+        // Skip the remaining data
         skipBytes(dataLength);
-//        logger.info("dataLength: " + dataLength);
     }
 
     private void parsePictureHeader() {

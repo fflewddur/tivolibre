@@ -37,17 +37,19 @@ class TransportStreamPacket {
     private ByteBuffer buffer;
     private int dataOffset;
     private int pesHeaderOffset;
+    private long pts;
+    private long dts;
 
     private final static Logger logger = LoggerFactory.getLogger(TransportStreamPacket.class);
 
-    public static TransportStreamPacket createFrom(ByteBuffer source, long packetId) throws IOException {
+    static TransportStreamPacket createFrom(ByteBuffer source, long packetId) throws IOException {
         TransportStreamPacket packet = new TransportStreamPacket();
         packet.setPacketId(packetId);
         packet.readFrom(source);
         return packet;
     }
 
-    public boolean readFrom(ByteBuffer source) throws IOException {
+    private boolean readFrom(ByteBuffer source) throws IOException {
         // Make a local copy of the buffer
         int bufferSize = Math.min(source.limit() - source.position(), TransportStream.FRAME_SIZE);
         buffer = ByteBuffer.allocate(bufferSize);
@@ -86,6 +88,7 @@ class TransportStreamPacket {
 
         if (headerLength > TransportStream.FRAME_SIZE) {
             // TODO fix adaptation field length when not in compatibility mode
+            logger.warn("TS header length is larger than frame size ({})", headerLength);
             headerLength = TransportStream.FRAME_SIZE;
         }
         header.setLength(headerLength);
@@ -107,11 +110,11 @@ class TransportStreamPacket {
     /**
      * Don't decode packets unless there is payload data to decrypt, even if the isScrambled bit is set.
      */
-    public boolean needsDecoding() {
+    boolean needsDecoding() {
         return (isScrambled() && header.getLength() + pesHeaderOffset < buffer.capacity());
     }
 
-    public byte[] getBytes() {
+    byte[] getBytes() {
         if (!buffer.hasArray()) {
             throw new IllegalStateException("Cannot get bytes from empty packet");
         }
@@ -121,7 +124,7 @@ class TransportStreamPacket {
         return bytes;
     }
 
-    public byte[] getScrambledBytes(byte[] decrypted) {
+    byte[] getScrambledBytes(byte[] decrypted) {
         byte[] bytes = new byte[buffer.capacity()];
         if (buffer.hasArray()) {
             System.arraycopy(buffer.array(), 0, bytes, 0, buffer.capacity() - decrypted.length);
@@ -132,44 +135,60 @@ class TransportStreamPacket {
         return bytes;
     }
 
-    public boolean isScrambled() {
+    boolean isScrambled() {
         return header.isScrambled();
     }
 
-    public void clearScrambled() {
+    void clearScrambled() {
         byte[] bytes = buffer.array();
         bytes[3] &= ~(0xC0);
     }
 
-    public int getPayloadLength() {
+    int getPayloadLength() {
         return buffer.capacity() - header.getLength();
     }
 
-    public void setPesHeaderOffset(int val) {
+    void setPesHeaderOffset(int val) {
         pesHeaderOffset = val;
     }
 
-    public int getPesHeaderOffset() {
+    int getPesHeaderOffset() {
         return pesHeaderOffset;
     }
 
-    public void setPacketId(long id) {
+    void setPacketId(long id) {
         packetId = id;
+    }
+
+    void setPTS(long pts) {
+        this.pts = pts;
+    }
+
+    long getPTS() {
+        return pts;
+    }
+
+    void setDTS(long dts) {
+        this.dts = dts;
+    }
+
+    long getDTS() {
+        return dts;
     }
 
 //    public long getPacketId() {
 //        return packetId;
 //    }
 
-    public PacketType getPacketType() {
+    PacketType getPacketType() {
         return header.getType();
     }
 
-    public int getPID() {
+    int getPID() {
         return header.getPID();
     }
 
-    public boolean isPayloadStart() {
+    boolean isPayloadStart() {
         return header.isPayloadStart();
     }
 
@@ -181,13 +200,13 @@ class TransportStreamPacket {
         return getDataAt(0);
     }
 
-    public byte[] getDataAt(int offset) {
+    byte[] getDataAt(int offset) {
         byte[] data = new byte[buffer.capacity() - header.getLength() - offset];
         System.arraycopy(buffer.array(), header.getLength() + offset, data, 0, data.length);
         return data;
     }
 
-    public byte[] readBytesFromData(int length) {
+    byte[] readBytesFromData(int length) {
         byte[] bytes = new byte[length];
         for (int i = 0; i < length; i++, dataOffset += Byte.BYTES) {
             bytes[i] = buffer.get(header.getLength() + dataOffset);
@@ -195,29 +214,29 @@ class TransportStreamPacket {
         return bytes;
     }
 
-    public int readIntFromData() {
+    int readIntFromData() {
         int val = buffer.getInt(header.getLength() + dataOffset);
         dataOffset += Integer.BYTES;
         return val;
     }
 
-    public int readUnsignedByteFromData() {
+    int readUnsignedByteFromData() {
         int val = buffer.get(header.getLength() + dataOffset) & 0xff; // Treat as unsigned byte
         dataOffset += Byte.BYTES;
         return val;
     }
 
-    public int readUnsignedShortFromData() {
+    int readUnsignedShortFromData() {
         int val = buffer.getShort(header.getLength() + dataOffset) & 0xffff; // Treat as unsigned short
         dataOffset += Short.BYTES;
         return val;
     }
 
-    public void advanceDataOffset(int bytes) {
+    void advanceDataOffset(int bytes) {
         dataOffset += bytes;
     }
 
-    public void setIsPmt(boolean val) {
+    void setIsPmt(boolean val) {
         isPmt = val;
     }
 
@@ -226,15 +245,15 @@ class TransportStreamPacket {
         return isPmt;
     }
 
-    public void setIsTivo(boolean val) {
+    void setIsTivo(boolean val) {
         isTivo = val;
     }
 
-    public boolean isTivo() {
+    boolean isTivo() {
         return isTivo;
     }
 
-    public Header getHeader() {
+    Header getHeader() {
         return header;
     }
 
@@ -253,7 +272,7 @@ class TransportStreamPacket {
         return s;
     }
 
-    public enum PacketType {
+    enum PacketType {
         PROGRAM_ASSOCIATION_TABLE(0x0000, 0x0000),
         CONDITIONAL_ACCESS_TABLE(0x0001, 0x0001),
         RESERVED(0x0002, 0x000F),
